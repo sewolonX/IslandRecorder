@@ -33,11 +33,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.island.recorder.R
+import com.island.recorder.domain.device.model.PermissionType
+import com.island.recorder.domain.device.provider.PermissionChecker
 import com.island.recorder.domain.recording.model.AudioSource
 import com.island.recorder.domain.recording.model.RecordingSettings
 import com.island.recorder.domain.recording.model.RecordingState
-import com.island.recorder.domain.device.model.PermissionType
-import com.island.recorder.domain.device.provider.PermissionChecker
 import com.island.recorder.domain.settings.repository.AppSettingsRepository
 import com.island.recorder.domain.settings.repository.BooleanSetting
 import com.island.recorder.domain.settings.repository.StringSetting
@@ -73,17 +73,18 @@ class RecordingShortcutActivity : ComponentActivity() {
         if (result.resultCode == RESULT_OK && result.data != null) {
             lifecycleScope.launch {
                 val settings = appSettingsRepo.recordingSettingsFlow.first()
-                val intent = Intent(this@RecordingShortcutActivity, RecorderService::class.java).apply {
-                    action = RecorderService.ACTION_START_RECORDING
-                    putExtra(RecorderService.EXTRA_RESULT_CODE, result.resultCode)
-                    putExtra(RecorderService.EXTRA_RESULT_DATA, result.data)
-                    putExtra(RecorderService.EXTRA_SETTINGS, settings)
-                }
+                val intent =
+                    Intent(this@RecordingShortcutActivity, RecorderService::class.java).apply {
+                        action = RecorderService.ACTION_START_RECORDING
+                        putExtra(RecorderService.EXTRA_RESULT_CODE, result.resultCode)
+                        putExtra(RecorderService.EXTRA_RESULT_DATA, result.data)
+                        putExtra(RecorderService.EXTRA_SETTINGS, settings)
+                    }
                 startService(intent)
                 finish()
             }
         } else {
-            Timber.tag("RecordingShortcut").w("MediaProjection permission denied")
+            Timber.w("MediaProjection permission denied")
             finish()
         }
     }
@@ -92,11 +93,11 @@ class RecordingShortcutActivity : ComponentActivity() {
         lifecycleScope.launch {
             val settings = appSettingsRepo.recordingSettingsFlow.first()
             if (!hasPostNotificationsPermission()) {
-                Timber.tag("RecordingShortcut").w("Post notifications permission is required")
+                Timber.w("Post notifications permission is required")
                 return@launch
             }
             if (settings.audioSource.usesMicrophone() && !hasRecordAudioPermission()) {
-                Timber.tag("RecordingShortcut")
+                Timber
                     .w("Record audio permission is required for ${settings.audioSource}")
                 return@launch
             }

@@ -6,25 +6,56 @@ import android.graphics.drawable.Icon
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
-import timber.log.Timber
 import com.island.recorder.R
 import com.island.recorder.domain.recording.model.RecordingState
 import com.island.recorder.domain.recording.model.TileStyle
 import com.island.recorder.domain.settings.repository.AppSettingsRepository
 import com.island.recorder.ui.activity.RecordingShortcutActivity
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
+import timber.log.Timber
 
 class QuickTileService : TileService() {
 
-    private val appSettingsRepo: AppSettingsRepository by inject()
+    private val appSettingsRepo: AppSettingsRepository by inject()
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var tileStateJob: Job? = null
+
     override fun onStartListening() {
         super.onStartListening()
-        val isRecording = RecorderService.recordingState.value.let {
-            it is RecordingState.Recording || it is RecordingState.Paused
+        tileStateJob?.cancel()
+        tileStateJob = serviceScope.launch {
+            combine(
+                RecorderService.recordingState,
+                appSettingsRepo.recordingSettingsFlow
+            ) { recordingState, settings ->
+                TileSnapshot(
+                    isRecording = recordingState.isRecordingTileState(),
+                    tileStyle = settings.tileStyle
+                )
+            }.distinctUntilChanged().collect { snapshot ->
+                updateTile(snapshot)
+            }
         }
-        updateTile(isRecording)
+    }
+
+    override fun onStopListening() {
+        tileStateJob?.cancel()
+        tileStateJob = null
+        super.onStopListening()
+    }
+
+    override fun onDestroy() {
+        tileStateJob?.cancel()
+        serviceScope.cancel()
+        super.onDestroy()
     }
 
     override fun onClick() {
@@ -33,14 +64,12 @@ class QuickTileService : TileService() {
         val state = RecorderService.recordingState.value
 
         if (state is RecordingState.Recording || state is RecordingState.Paused) {
-            // Stop directly via service intent - no Activity needed
             Timber.d("Quick tile clicked - stopping recording")
             val intent = Intent(this, RecorderService::class.java).apply {
                 action = RecorderService.ACTION_STOP_RECORDING
             }
             startService(intent)
         } else {
-            // Launch transparent activity for MediaProjection consent
             Timber.d("Quick tile clicked - launching shortcut for recording")
             val intent = Intent(this, RecordingShortcutActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -58,21 +87,27 @@ class QuickTileService : TileService() {
         }
     }
 
-    private fun updateTile(isRecording: Boolean) {
-        val settings = runBlocking { appSettingsRepo.recordingSettingsFlow.first() }
-        val tileStyle = settings.tileStyle
-        val iconRes = if (tileStyle == TileStyle.APP_ICON) {
+    private fun updateTile(snapshot: TileSnapshot) {
+        val iconRes = if (snapshot.tileStyle == TileStyle.APP_ICON) {
             R.drawable.ic_launcher_foreground_large
         } else {
             R.drawable.ic_record
         }
 
         qsTile?.apply {
-            state = if (isRecording) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
+            state = if (snapshot.isRecording) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
             label =
-                if (isRecording) getString(R.string.tile_stop_recording) else getString(R.string.tile_start_recording)
+                if (snapshot.isRecording) getString(R.string.tile_stop_recording) else getString(R.string.tile_start_recording)
             icon = Icon.createWithResource(this@QuickTileService, iconRes)
             updateTile()
         }
     }
+
+    private fun RecordingState.isRecordingTileState(): Boolean =
+        this is RecordingState.Recording || this is RecordingState.Paused
+
+    private data class TileSnapshot(
+        val isRecording: Boolean,
+        val tileStyle: TileStyle
+    )
 }

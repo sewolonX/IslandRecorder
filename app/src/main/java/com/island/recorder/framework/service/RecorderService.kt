@@ -2,11 +2,14 @@ package com.island.recorder.framework.service
 
 import android.Manifest
 import android.app.Service
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Binder
 import android.os.IBinder
+import android.service.quicksettings.TileService
 import com.island.recorder.R
 import com.island.recorder.core.audio.AudioRecorder
 import com.island.recorder.core.codec.AudioEncoder
@@ -94,6 +97,13 @@ class RecorderService : Service() {
 
         private val _recordingState = MutableStateFlow<RecordingState>(RecordingState.Idle)
         val recordingState: StateFlow<RecordingState> = _recordingState.asStateFlow()
+
+        fun requestTileRefresh(context: Context) {
+            TileService.requestListeningState(
+                context,
+                ComponentName(context, QuickTileService::class.java)
+            )
+        }
     }
 
     override fun onCreate() {
@@ -146,6 +156,7 @@ class RecorderService : Service() {
             Timber.e("RECORD_AUDIO is required for ${settings.audioSource}")
             _recordingState.value =
                 RecordingState.Error(getString(R.string.permission_audio_required))
+            requestTileRefresh(this)
             stopSelf()
             return
         }
@@ -171,6 +182,7 @@ class RecorderService : Service() {
             if (!screenCaptureManager.initializeProjection(resultCode, data)) {
                 _recordingState.value =
                     RecordingState.Error(getString(R.string.error_screen_capture))
+                requestTileRefresh(this)
                 stopSelf()
                 return
             }
@@ -178,6 +190,7 @@ class RecorderService : Service() {
         } catch (e: Exception) {
             Timber.e(e, "Error starting foreground/projection")
             _recordingState.value = RecordingState.Error(e.message ?: "Unknown error")
+            requestTileRefresh(this)
             stopSelf()
             return
         }
@@ -306,6 +319,7 @@ class RecorderService : Service() {
                 // Start recording loop
                 startTime = System.currentTimeMillis()
                 _recordingState.value = RecordingState.Recording(0)
+                requestTileRefresh(this@RecorderService)
 
                 recordingJob = serviceScope.launch {
                     recordingLoop()
@@ -324,6 +338,7 @@ class RecorderService : Service() {
             } catch (e: Exception) {
                 Timber.e(e, "Error starting recording")
                 _recordingState.value = RecordingState.Error(e.message ?: "Unknown error")
+                requestTileRefresh(this@RecorderService)
                 withContext(Dispatchers.Main) { stopSelf() }
             }
         }
@@ -513,6 +528,7 @@ class RecorderService : Service() {
             screenCaptureManager.pause()
             muxer?.onPause()
             _recordingState.value = RecordingState.Paused(currentState.durationMs)
+            requestTileRefresh(this)
 
             val notification = notificationHelper.createRecordingNotification(
                 currentState.durationMs,
@@ -536,6 +552,7 @@ class RecorderService : Service() {
                 screenCaptureManager.resume(surface)
             }
             _recordingState.value = RecordingState.Recording(currentState.durationMs)
+            requestTileRefresh(this)
 
             val notification = notificationHelper.createRecordingNotification(
                 currentState.durationMs,
@@ -569,6 +586,7 @@ class RecorderService : Service() {
 
         // Update state immediately for responsive UI
         _recordingState.value = RecordingState.Idle
+        requestTileRefresh(this)
 
         cleanupJob = serviceScope.launch(Dispatchers.IO) {
             startJob?.cancelAndJoin()
