@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.view.Gravity
-import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
@@ -19,9 +18,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
-import com.island.recorder.R
 import com.island.recorder.framework.service.FloatingControlService
-import kotlin.math.abs
 
 /**
  * Manages the floating camera overlay using CameraX
@@ -30,13 +27,13 @@ class CameraOverlay(private val context: Context) : LifecycleOwner {
 
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val lifecycleRegistry = LifecycleRegistry(this)
-    
+
     private var overlayView: View? = null
     private var previewView: PreviewView? = null
     private var layoutParams: WindowManager.LayoutParams? = null
-    
+
     private var cameraProvider: ProcessCameraProvider? = null
-    
+
     init {
         lifecycleRegistry.currentState = Lifecycle.State.CREATED
     }
@@ -62,14 +59,17 @@ class CameraOverlay(private val context: Context) : LifecycleOwner {
 
         // Inflate view (Using a simple FrameLayout + PreviewView programmatically for now to avoid XML dep if missing)
         val container = FrameLayout(context)
-        container.background = ContextCompat.getDrawable(context, android.R.drawable.dialog_holo_light_frame)
-        
+        container.background =
+            ContextCompat.getDrawable(context, android.R.drawable.dialog_holo_light_frame)
+
         previewView = PreviewView(context)
-        container.addView(previewView, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, 
-            FrameLayout.LayoutParams.MATCH_PARENT
-        ))
-        
+        container.addView(
+            previewView, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+
         // Add close button (Top Right)
         val closeButton = ImageButton(context).apply {
             setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
@@ -104,6 +104,7 @@ class CameraOverlay(private val context: Context) : LifecycleOwner {
                         initialTouchY = event.rawY
                         return true
                     }
+
                     MotionEvent.ACTION_MOVE -> {
                         layoutParams!!.x = initialX + (event.rawX - initialTouchX).toInt()
                         layoutParams!!.y = initialY + (event.rawY - initialTouchY).toInt()
@@ -135,7 +136,7 @@ class CameraOverlay(private val context: Context) : LifecycleOwner {
 
     private fun bindCameraUseCases() {
         val provider = cameraProvider ?: return
-        
+
         val preview = Preview.Builder().build()
         preview.setSurfaceProvider(previewView?.surfaceProvider)
 

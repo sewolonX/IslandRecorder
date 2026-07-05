@@ -3,10 +3,12 @@ package com.island.recorder.di
 import com.island.recorder.core.audio.AudioRecorder
 import com.island.recorder.core.codec.AudioEncoder
 import com.island.recorder.core.codec.VideoEncoder
+import com.island.recorder.core.projection.ScreenCaptureManager
 import com.island.recorder.core.reflection.ReflectionProvider
 import com.island.recorder.core.reflection.ReflectionProviderImpl
 import com.island.recorder.domain.device.provider.PermissionChecker
 import com.island.recorder.domain.recording.provider.RecordingStorageProvider
+import com.island.recorder.framework.notification.RecordingNotificationManager
 import com.island.recorder.framework.permission.AndroidPermissionChecker
 import com.island.recorder.framework.privileged.core.infrastructure.lifecycle.RecyclerManager
 import com.island.recorder.framework.privileged.core.infrastructure.process.AppProcessTerminal
@@ -23,6 +25,8 @@ import org.koin.dsl.module
 val coreModule = module {
     single<ReflectionProvider> { ReflectionProviderImpl() }
     single<PermissionChecker> { AndroidPermissionChecker(androidContext()) }
+    factory { ScreenCaptureManager(androidContext()) }
+    factory { RecordingNotificationManager(androidContext(), get()) }
     factory { AudioRecorder() }
     factory { AudioEncoder() }
     factory { params ->

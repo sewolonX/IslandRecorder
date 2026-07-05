@@ -30,7 +30,7 @@ import timber.log.Timber
 import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
 
-class NotificationHelper(
+class RecordingNotificationManager(
     private val context: Context,
     private val privilegedOperations: PrivilegedOperationProvider
 ) {

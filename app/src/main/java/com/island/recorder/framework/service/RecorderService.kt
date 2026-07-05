@@ -7,9 +7,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.hardware.display.DisplayManager
 import android.os.Binder
 import android.os.IBinder
 import android.service.quicksettings.TileService
+import android.view.Display
 import com.island.recorder.R
 import com.island.recorder.core.audio.AudioRecorder
 import com.island.recorder.core.codec.AudioEncoder
@@ -22,8 +24,8 @@ import com.island.recorder.domain.recording.model.RecordingSettings
 import com.island.recorder.domain.recording.model.RecordingState
 import com.island.recorder.domain.recording.model.ScreenOrientation
 import com.island.recorder.domain.recording.provider.RecordingStorageProvider
+import com.island.recorder.framework.notification.RecordingNotificationManager
 import com.island.recorder.framework.privileged.provider.PrivilegedOperationProvider
-import com.island.recorder.framework.notification.NotificationHelper
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -56,8 +58,8 @@ class RecorderService : Service() {
     private val privilegedOperations: PrivilegedOperationProvider by inject()
     private val recordingStorageProvider: RecordingStorageProvider by inject()
 
-    private lateinit var notificationHelper: NotificationHelper
-    private lateinit var screenCaptureManager: ScreenCaptureManager
+    private val recordingNotificationManager: RecordingNotificationManager by inject()
+    private val screenCaptureManager: ScreenCaptureManager by inject()
 
     private var videoEncoder: VideoEncoder? = null
     private var audioEncoder: AudioEncoder? = null
@@ -77,11 +79,11 @@ class RecorderService : Service() {
     private var touchVisualizationEnabled = false
 
     private var lastHdrState = false
-    private val displayListener = object : android.hardware.display.DisplayManager.DisplayListener {
+    private val displayListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) {}
         override fun onDisplayRemoved(displayId: Int) {}
         override fun onDisplayChanged(displayId: Int) {
-            if (displayId == android.view.Display.DEFAULT_DISPLAY) {
+            if (displayId == Display.DEFAULT_DISPLAY) {
                 checkHdrState()
             }
         }
@@ -110,11 +112,7 @@ class RecorderService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        notificationHelper = NotificationHelper(this, privilegedOperations)
-        screenCaptureManager = ScreenCaptureManager(this)
-
-        val displayManager =
-            getSystemService(DISPLAY_SERVICE) as android.hardware.display.DisplayManager
+        val displayManager = getSystemService(DISPLAY_SERVICE) as DisplayManager
         displayManager.registerDisplayListener(displayListener, null)
 
         Timber.d("RecorderService created")
@@ -169,7 +167,7 @@ class RecorderService : Service() {
 
         try {
             // Start foreground service (must happen on main thread)
-            val notification = notificationHelper.createRecordingNotification(
+            val notification = recordingNotificationManager.createRecordingNotification(
                 0L,
                 bypass = settings.bypassFocusIsland
             )
@@ -178,7 +176,11 @@ class RecorderService : Service() {
                 foregroundServiceType =
                     foregroundServiceType or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
             }
-            startForeground(NotificationHelper.NOTIFICATION_ID, notification, foregroundServiceType)
+            startForeground(
+                RecordingNotificationManager.NOTIFICATION_ID,
+                notification,
+                foregroundServiceType
+            )
 
             // Initialize MediaProjection (must happen on main thread before API calls)
             if (!screenCaptureManager.initializeProjection(resultCode, data)) {
@@ -289,11 +291,22 @@ class RecorderService : Service() {
 
                     audioRecorder = get()
 
-                    // Start audio recording with the specified source
-                    val success = audioRecorder?.start(
-                        screenCaptureManager.getMediaProjection(),
-                        settings.audioSource
-                    ) ?: false
+                    // Keep the permission check adjacent to the call site so lint can verify it,
+                    // and so we still fail safely if the permission is revoked mid-session.
+                    val success = if (hasRecordAudioPermission()) {
+                        try {
+                            audioRecorder?.start(
+                                screenCaptureManager.getMediaProjection(),
+                                settings.audioSource
+                            ) ?: false
+                        } catch (e: SecurityException) {
+                            Timber.e(e, "Missing RECORD_AUDIO when starting audio recorder")
+                            false
+                        }
+                    } else {
+                        Timber.e("RECORD_AUDIO permission missing when starting audio recorder")
+                        false
+                    }
 
                     if (success) {
                         audioEnabled = true
@@ -325,8 +338,8 @@ class RecorderService : Service() {
                 _recordingState.value = RecordingState.Recording(0)
                 requestTileRefresh(this@RecorderService)
                 val bypass = settings.bypassFocusIsland
-                notificationHelper.updateNotification(
-                    notificationHelper.createRecordingNotification(0L, bypass = bypass),
+                recordingNotificationManager.updateNotification(
+                    recordingNotificationManager.createRecordingNotification(0L, bypass = bypass),
                     bypass = bypass
                 )
 
@@ -515,12 +528,12 @@ class RecorderService : Service() {
             _recordingState.value = RecordingState.Paused(currentState.durationMs)
             requestTileRefresh(this)
 
-            val notification = notificationHelper.createRecordingNotification(
+            val notification = recordingNotificationManager.createRecordingNotification(
                 currentState.durationMs,
                 isPaused = true,
                 bypass = currentSettings?.bypassFocusIsland ?: false
             )
-            notificationHelper.updateNotification(
+            recordingNotificationManager.updateNotification(
                 notification,
                 bypass = currentSettings?.bypassFocusIsland ?: false
             )
@@ -539,11 +552,11 @@ class RecorderService : Service() {
             _recordingState.value = RecordingState.Recording(currentState.durationMs)
             requestTileRefresh(this)
 
-            val notification = notificationHelper.createRecordingNotification(
+            val notification = recordingNotificationManager.createRecordingNotification(
                 currentState.durationMs,
                 bypass = currentSettings?.bypassFocusIsland ?: false
             )
-            notificationHelper.updateNotification(
+            recordingNotificationManager.updateNotification(
                 notification,
                 bypass = currentSettings?.bypassFocusIsland ?: false
             )
@@ -551,9 +564,8 @@ class RecorderService : Service() {
     }
 
     private fun checkHdrState() {
-        val displayManager =
-            getSystemService(android.content.Context.DISPLAY_SERVICE) as android.hardware.display.DisplayManager
-        val display = displayManager.getDisplay(android.view.Display.DEFAULT_DISPLAY) ?: return
+        val displayManager = getSystemService(DISPLAY_SERVICE) as DisplayManager
+        val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY) ?: return
 
         val isHdr = display.mode.supportedHdrTypes.isNotEmpty()
 
@@ -644,14 +656,13 @@ class RecorderService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        val displayManager =
-            getSystemService(android.content.Context.DISPLAY_SERVICE) as android.hardware.display.DisplayManager
+        val displayManager = getSystemService(DISPLAY_SERVICE) as DisplayManager
         displayManager.unregisterDisplayListener(displayListener)
 
         if (_recordingState.value !is RecordingState.Idle) {
             stopRecording()
         }
-        notificationHelper.release()
+        recordingNotificationManager.release()
         val cleanup = cleanupJob
         if (cleanup?.isActive == true) {
             cleanup.invokeOnCompletion {

@@ -2,38 +2,35 @@ package com.island.recorder.framework.service
 
 import android.annotation.SuppressLint
 import android.app.Service
-import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.IBinder
-import timber.log.Timber
 import android.view.Gravity
-import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
-import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.LinearLayout
-import com.island.recorder.R
 import com.island.recorder.core.camera.CameraOverlay
+import timber.log.Timber
 import kotlin.math.abs
 
 /**
  * Service for floating control overlay with pause/stop/camera controls
  */
 class FloatingControlService : Service() {
-    
+
     private var cameraOverlay: CameraOverlay? = null
     private var controlOverlay: View? = null
-    private val windowManager by lazy { getSystemService(Context.WINDOW_SERVICE) as WindowManager }
+    private val windowManager by lazy { getSystemService(WINDOW_SERVICE) as WindowManager }
+
     override fun onCreate() {
         super.onCreate()
         Timber.d("FloatingControlService created")
         cameraOverlay = CameraOverlay(this)
         createControlOverlay()
     }
-    
+
     @SuppressLint("ClickableViewAccessibility")
     private fun createControlOverlay() {
         // Create layout params for overlay
@@ -48,14 +45,14 @@ class FloatingControlService : Service() {
             x = 20
             y = 100
         }
-        
+
         // Create control panel with buttons
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(16, 16, 16, 16)
             setBackgroundResource(android.R.drawable.dialog_holo_dark_frame)
         }
-        
+
         // Pause button
         val pauseButton = ImageButton(this).apply {
             setImageResource(android.R.drawable.ic_media_pause)
@@ -67,7 +64,7 @@ class FloatingControlService : Service() {
             }
         }
         container.addView(pauseButton)
-        
+
         // Stop button
         val stopButton = ImageButton(this).apply {
             setImageResource(android.R.drawable.ic_delete)
@@ -79,7 +76,7 @@ class FloatingControlService : Service() {
             }
         }
         container.addView(stopButton)
-        
+
         // Close button
         val closeButton = ImageButton(this).apply {
             setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
@@ -90,14 +87,14 @@ class FloatingControlService : Service() {
             }
         }
         container.addView(closeButton)
-        
+
         // Make overlay draggable
         container.setOnTouchListener(object : View.OnTouchListener {
             private var initialX = 0
             private var initialY = 0
             private var initialTouchX = 0f
             private var initialTouchY = 0f
-            
+
             override fun onTouch(v: View, event: MotionEvent): Boolean {
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> {
@@ -107,10 +104,11 @@ class FloatingControlService : Service() {
                         initialTouchY = event.rawY
                         return true
                     }
+
                     MotionEvent.ACTION_MOVE -> {
                         val deltaX = (initialTouchX - event.rawX).toInt()
                         val deltaY = (event.rawY - initialTouchY).toInt()
-                        
+
                         if (abs(deltaX) > 5 || abs(deltaY) > 5) {
                             params.x = initialX + deltaX
                             params.y = initialY + deltaY
@@ -122,29 +120,29 @@ class FloatingControlService : Service() {
                 return false
             }
         })
-        
+
         controlOverlay = container
         windowManager.addView(container, params)
         Timber.d("Control overlay created")
     }
-    
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Timber.d("FloatingControlService started")
         cameraOverlay?.show()
         return START_NOT_STICKY
     }
-    
+
     override fun onBind(intent: Intent?): IBinder? {
         return null
     }
-    
+
     override fun onDestroy() {
         super.onDestroy()
         Timber.d("FloatingControlService destroyed")
-        
+
         cameraOverlay?.stop()
         cameraOverlay = null
-        
+
         controlOverlay?.let { windowManager.removeView(it) }
         controlOverlay = null
     }
