@@ -124,8 +124,8 @@ class DeviceCapabilityProviderImpl : DeviceCapabilityProvider {
             process.waitFor() == 0
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
-            Timber.d(e, "Root probe failed: %s", command)
+        } catch (_: Exception) {
+            Timber.i("Root probe failed: %s", command)
             false
         }
 }

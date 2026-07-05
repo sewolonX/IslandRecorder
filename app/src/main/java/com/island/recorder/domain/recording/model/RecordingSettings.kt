@@ -8,7 +8,7 @@ import kotlinx.parcelize.Parcelize
 /**
  * Video quality tiers - dimensions computed at runtime based on device screen
  */
-enum class VideoQuality(val targetShortSide: Int, @StringRes val tierLabelResId: Int) {
+enum class VideoQuality(val targetShortSide: Int, @param:StringRes val tierLabelResId: Int) {
     NATIVE(0, R.string.quality_native),
     FHD(1080, R.string.quality_fhd),
     HIGH(720, R.string.quality_high),
@@ -34,7 +34,7 @@ enum class VideoQuality(val targetShortSide: Int, @StringRes val tierLabelResId:
 /**
  * Video bitrate options
  */
-enum class VideoBitrate(val bps: Int, @StringRes val labelResId: Int) {
+enum class VideoBitrate(val bps: Int, @param:StringRes val labelResId: Int) {
     AUTO(0, R.string.bitrate_auto),
     BITRATE_1M(1_000_000, R.string.bitrate_1m),
     BITRATE_4M(4_000_000, R.string.bitrate_4m),
@@ -50,7 +50,7 @@ enum class VideoBitrate(val bps: Int, @StringRes val labelResId: Int) {
 /**
  * Screen orientation for recording
  */
-enum class ScreenOrientation(@StringRes val labelResId: Int) {
+enum class ScreenOrientation(@param:StringRes val labelResId: Int) {
     AUTO(R.string.orientation_auto),
     PORTRAIT(R.string.orientation_portrait),
     LANDSCAPE(R.string.orientation_landscape)
@@ -59,7 +59,7 @@ enum class ScreenOrientation(@StringRes val labelResId: Int) {
 /**
  * Frame rate options
  */
-enum class FrameRate(val fps: Int, @StringRes val labelResId: Int) {
+enum class FrameRate(val fps: Int, @param:StringRes val labelResId: Int) {
     AUTO(0, R.string.fps_auto),
     FPS_15(15, R.string.fps_15),
     FPS_24(24, R.string.fps_24),
@@ -76,7 +76,7 @@ enum class FrameRate(val fps: Int, @StringRes val labelResId: Int) {
 /**
  * Audio source configuration
  */
-enum class AudioSource(@StringRes val labelResId: Int) {
+enum class AudioSource(@param:StringRes val labelResId: Int) {
     NONE(R.string.audio_none),
     INTERNAL(R.string.audio_internal),
     MICROPHONE(R.string.audio_microphone),
@@ -86,7 +86,7 @@ enum class AudioSource(@StringRes val labelResId: Int) {
 /**
  * Video codec options
  */
-enum class VideoCodec(val mimeType: String, @StringRes val labelResId: Int, val isHdrEnabled: Boolean = false) {
+enum class VideoCodec(val mimeType: String, @param:StringRes val labelResId: Int, val isHdrEnabled: Boolean = false) {
     H264(android.media.MediaFormat.MIMETYPE_VIDEO_AVC, R.string.codec_h264),
     H265(android.media.MediaFormat.MIMETYPE_VIDEO_HEVC, R.string.codec_h265),
     H265_HDR(android.media.MediaFormat.MIMETYPE_VIDEO_HEVC, R.string.codec_h265_hdr, true)
@@ -95,7 +95,7 @@ enum class VideoCodec(val mimeType: String, @StringRes val labelResId: Int, val 
 /**
  * Quick settings tile icon style
  */
-enum class TileStyle(@StringRes val labelResId: Int) {
+enum class TileStyle(@param:StringRes val labelResId: Int) {
     DEFAULT(R.string.tile_style_default),
     APP_ICON(R.string.tile_style_app_icon)
 }

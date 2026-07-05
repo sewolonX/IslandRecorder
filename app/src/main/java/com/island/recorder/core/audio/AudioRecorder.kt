@@ -1,53 +1,53 @@
 package com.island.recorder.core.audio
 
-import android.annotation.SuppressLint
+import android.Manifest
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioPlaybackCaptureConfiguration
 import android.media.AudioRecord
-import android.media.projection.MediaProjection
 import android.media.MediaRecorder
-import android.os.Build
-import timber.log.Timber
+import android.media.projection.MediaProjection
+import androidx.annotation.RequiresPermission
 import com.island.recorder.domain.recording.model.AudioSource
+import timber.log.Timber
 
 /**
  * Handles Audio capture (Mic, System Internal, or Both)
  * Supports mixing multiple audio sources when BOTH mode is selected
  */
 class AudioRecorder {
-    
+
     private var micRecorder: AudioRecord? = null
     private var internalRecorder: AudioRecord? = null
     private var bufferSize = 0
     private var isRecording = false
     private var currentAudioSource: AudioSource = AudioSource.NONE
-    
-    companion object {
-        private const val SAMPLE_RATE = 44100
-        private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_STEREO
-        private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
+
+    private companion object {
+        const val SAMPLE_RATE = 44100
+        const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_STEREO
+        const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
     }
-    
+
     /**
      * Start audio recording based on the specified audio source
      * @param mediaProjection Required for System Audio (Internal)
      * @param audioSource The audio source mode (NONE, INTERNAL, MICROPHONE, BOTH)
      */
-    @SuppressLint("MissingPermission")
+    @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     fun start(mediaProjection: MediaProjection?, audioSource: AudioSource): Boolean {
         currentAudioSource = audioSource
-        
+
         if (audioSource == AudioSource.NONE) {
             Timber.d("Audio source is NONE, skipping audio recording")
             return true // Not an error, just no audio
         }
-        
+
         bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT) * 2
-        
+
         var micSuccess = false
         var internalSuccess = false
-        
+
         try {
             // Initialize Microphone Recorder (for MICROPHONE or BOTH)
             if (audioSource == AudioSource.MICROPHONE || audioSource == AudioSource.BOTH) {
@@ -58,7 +58,7 @@ class AudioRecorder {
                     AUDIO_FORMAT,
                     bufferSize
                 )
-                
+
                 if (micRecorder?.state == AudioRecord.STATE_INITIALIZED) {
                     micRecorder?.startRecording()
                     micSuccess = true
@@ -69,18 +69,18 @@ class AudioRecorder {
                     micRecorder = null
                 }
             }
-            
+
             // Initialize Internal Audio Recorder (for INTERNAL or BOTH)
-            if ((audioSource == AudioSource.INTERNAL || audioSource == AudioSource.BOTH) 
-                && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q 
-                && mediaProjection != null) {
-                
+            if ((audioSource == AudioSource.INTERNAL || audioSource == AudioSource.BOTH)
+                && mediaProjection != null
+            ) {
+
                 val config = AudioPlaybackCaptureConfiguration.Builder(mediaProjection)
                     .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
                     .addMatchingUsage(AudioAttributes.USAGE_GAME)
                     .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
                     .build()
-                
+
                 internalRecorder = AudioRecord.Builder()
                     .setAudioFormat(
                         AudioFormat.Builder()
@@ -92,7 +92,7 @@ class AudioRecorder {
                     .setAudioPlaybackCaptureConfig(config)
                     .setBufferSizeInBytes(bufferSize)
                     .build()
-                
+
                 if (internalRecorder?.state == AudioRecord.STATE_INITIALIZED) {
                     internalRecorder?.startRecording()
                     internalSuccess = true
@@ -102,18 +102,15 @@ class AudioRecorder {
                     internalRecorder?.release()
                     internalRecorder = null
                 }
-            } else if (audioSource == AudioSource.INTERNAL && Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-                Timber.e("Internal audio capture requires Android 10 (Q) or higher")
             }
-            
+
             // Determine overall success
             val success = when (audioSource) {
                 AudioSource.MICROPHONE -> micSuccess
                 AudioSource.INTERNAL -> internalSuccess
                 AudioSource.BOTH -> micSuccess || internalSuccess // At least one should work
-                AudioSource.NONE -> true
             }
-            
+
             if (success) {
                 isRecording = true
                 Timber.d("Audio recording started: $audioSource (Mic: $micSuccess, Internal: $internalSuccess)")
@@ -122,40 +119,43 @@ class AudioRecorder {
                 stop()
                 Timber.e("Failed to start any audio recorder")
             }
-            
+
             return success
-            
+
         } catch (e: Exception) {
             Timber.e(e, "Failed to start AudioRecorder")
             stop()
             return false
         }
     }
-    
+
     /**
      * Read audio data into buffer
      * Handles mixing when both sources are active
      */
     fun read(buffer: ByteArray, size: Int): Int {
         if (!isRecording) return -1
-        
+
         return when (currentAudioSource) {
             AudioSource.MICROPHONE -> {
                 // Read from mic only
                 micRecorder?.read(buffer, 0, size) ?: -1
             }
+
             AudioSource.INTERNAL -> {
                 // Read from internal only
                 internalRecorder?.read(buffer, 0, size) ?: -1
             }
+
             AudioSource.BOTH -> {
                 // Mix both sources
                 mixAudioSources(buffer, size)
             }
+
             AudioSource.NONE -> -1
         }
     }
-    
+
     /**
      * Mix audio from both microphone and internal sources
      * Uses 50% gain for each source to prevent clipping
@@ -163,19 +163,19 @@ class AudioRecorder {
     private fun mixAudioSources(outputBuffer: ByteArray, size: Int): Int {
         val micBuffer = ByteArray(size)
         val internalBuffer = ByteArray(size)
-        
+
         val micRead = micRecorder?.read(micBuffer, 0, size) ?: 0
         val internalRead = internalRecorder?.read(internalBuffer, 0, size) ?: 0
-        
+
         // If neither source has data, return -1
         if (micRead <= 0 && internalRead <= 0) {
             return -1
         }
-        
+
         // Mix the audio samples (PCM 16-bit)
         // We process 2 bytes at a time (16-bit samples)
         val maxRead = maxOf(micRead, internalRead)
-        
+
         for (i in 0 until maxRead step 2) {
             // Read 16-bit samples (little-endian)
             val micSample = if (i < micRead) {
@@ -183,33 +183,33 @@ class AudioRecorder {
             } else {
                 0
             }
-            
+
             val internalSample = if (i < internalRead) {
                 ((internalBuffer[i + 1].toInt() shl 8) or (internalBuffer[i].toInt() and 0xFF)).toShort()
             } else {
                 0
             }
-            
+
             // Mix by addition with clamping to prevent overflow (preserves volume)
             var mixedInt = micSample.toInt() + internalSample.toInt()
             if (mixedInt > 32767) mixedInt = 32767
             else if (mixedInt < -32768) mixedInt = -32768
-            
+
             val mixed = mixedInt.toShort()
-            
+
             // Write back to output buffer (little-endian)
             outputBuffer[i] = (mixed.toInt() and 0xFF).toByte()
             outputBuffer[i + 1] = ((mixed.toInt() shr 8) and 0xFF).toByte()
         }
-        
+
         return maxRead
     }
-    
+
     fun getBufferSize(): Int = bufferSize
-    
+
     fun stop() {
         isRecording = false
-        
+
         try {
             micRecorder?.stop()
             micRecorder?.release()
@@ -218,7 +218,7 @@ class AudioRecorder {
         } catch (e: Exception) {
             Timber.e(e, "Error stopping microphone recorder")
         }
-        
+
         try {
             internalRecorder?.stop()
             internalRecorder?.release()
@@ -227,7 +227,7 @@ class AudioRecorder {
         } catch (e: Exception) {
             Timber.e(e, "Error stopping internal recorder")
         }
-        
+
         Timber.d("AudioRecorder stopped")
     }
 }

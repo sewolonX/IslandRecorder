@@ -93,13 +93,14 @@ class VideoEncoder(
                         isHdrActive = true
 
                         Timber.d("Global HDR mode: HEVC Main10 + BT.2020 + HLG + FULL RANGE")
-                    } else
+                    } else {
                         setInteger(
                             MediaFormat.KEY_PROFILE,
                             MediaCodecInfo.CodecProfileLevel.HEVCProfileMain
                         )
                         applyHdrConfig(HdrConfig.SDR)
                         Timber.d("HEVC Main profile enabled (8-bit)")
+                    }
                 }
             }
 

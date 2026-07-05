@@ -7,7 +7,7 @@ android {
     compileSdkMinor = BuildConfig.COMPILE_SDK_MINOR
 
     defaultConfig {
-        minSdk = 28
+        minSdk = BuildConfig.MIN_SDK
         targetSdk = BuildConfig.TARGET_SDK
     }
 

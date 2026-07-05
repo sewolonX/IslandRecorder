@@ -23,7 +23,7 @@ import com.island.recorder.domain.recording.model.RecordingState
 import com.island.recorder.domain.recording.model.ScreenOrientation
 import com.island.recorder.domain.recording.provider.RecordingStorageProvider
 import com.island.recorder.framework.privileged.provider.PrivilegedOperationProvider
-import com.island.recorder.util.NotificationHelper
+import com.island.recorder.framework.notification.NotificationHelper
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,7 +40,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.koin.android.ext.android.get
 import org.koin.android.ext.android.inject
+import org.koin.core.parameter.parametersOf
 import timber.log.Timber
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -237,15 +239,17 @@ class RecorderService : Service() {
                 val maxRefreshRate = screenCaptureManager.getMaxRefreshRate()
                 val frameRate = settings.frameRate.fps.takeIf { it > 0 } ?: maxRefreshRate
                 val bitrate = settings.calculateBitrate(width, height, maxRefreshRate)
-                videoEncoder = VideoEncoder(
-                    width,
-                    height,
-                    bitrate,
-                    frameRate,
-                    maxFpsToEncoder = settings.frameRate.fps.takeIf { it > 0 },
-                    mimeType = settings.videoCodec.mimeType,
-                    isHdrEnabled = settings.videoCodec.isHdrEnabled
-                )
+                videoEncoder = get {
+                    parametersOf(
+                        width,
+                        height,
+                        bitrate,
+                        frameRate,
+                        settings.frameRate.fps.takeIf { it > 0 },
+                        settings.videoCodec.mimeType,
+                        settings.videoCodec.isHdrEnabled
+                    )
+                }
 
                 val surface = videoEncoder?.prepare()
                 if (surface == null) {
@@ -280,10 +284,10 @@ class RecorderService : Service() {
 
                 if (settings.audioSource != AudioSource.NONE) {
                     Timber.d("Initializing audio encoder and recorder...")
-                    audioEncoder = AudioEncoder() // Default settings
+                    audioEncoder = get()
                     audioEncoder?.prepare()
 
-                    audioRecorder = AudioRecorder()
+                    audioRecorder = get()
 
                     // Start audio recording with the specified source
                     val success = audioRecorder?.start(
@@ -320,6 +324,11 @@ class RecorderService : Service() {
                 startTime = System.currentTimeMillis()
                 _recordingState.value = RecordingState.Recording(0)
                 requestTileRefresh(this@RecorderService)
+                val bypass = settings.bypassFocusIsland
+                notificationHelper.updateNotification(
+                    notificationHelper.createRecordingNotification(0L, bypass = bypass),
+                    bypass = bypass
+                )
 
                 recordingJob = serviceScope.launch {
                     recordingLoop()
@@ -346,8 +355,6 @@ class RecorderService : Service() {
 
     private suspend fun recordingLoop() {
         var videoTrackAdded = false
-        var lastNotificationUpdate = 0L
-        var lastPauseNotificationUpdate = 0L
 
         while (currentCoroutineContext().isActive) {
             val state = _recordingState.value
@@ -360,16 +367,6 @@ class RecorderService : Service() {
                     videoEncoder?.releaseOutputBuffer(drainOutput.index)
                 }
 
-                // Update notification periodically to keep Focus Island in sync
-                val now = System.currentTimeMillis()
-                if (now - lastPauseNotificationUpdate >= 1000) {
-                    lastPauseNotificationUpdate = now
-                    val bypass = currentSettings?.bypassFocusIsland ?: false
-                    val notification = notificationHelper.createRecordingNotification(
-                        state.durationMs, isPaused = true, bypass = bypass
-                    )
-                    notificationHelper.updateNotification(notification, bypass = bypass)
-                }
                 delay(10.milliseconds)
                 continue
             }
@@ -414,18 +411,6 @@ class RecorderService : Service() {
                 // Update duration
                 val currentDuration = System.currentTimeMillis() - startTime - pausedDuration
                 _recordingState.value = RecordingState.Recording(currentDuration)
-
-                // Update notification every second
-                val currentSecond = currentDuration / 1000
-                if (currentSecond != lastNotificationUpdate) {
-                    lastNotificationUpdate = currentSecond
-                    val bypass = currentSettings?.bypassFocusIsland ?: false
-                    val notification = notificationHelper.createRecordingNotification(
-                        currentDuration,
-                        bypass = bypass
-                    )
-                    notificationHelper.updateNotification(notification, bypass = bypass)
-                }
 
                 delay(10.milliseconds) // Small delay to prevent busy waiting
 
@@ -666,6 +651,7 @@ class RecorderService : Service() {
         if (_recordingState.value !is RecordingState.Idle) {
             stopRecording()
         }
+        notificationHelper.release()
         val cleanup = cleanupJob
         if (cleanup?.isActive == true) {
             cleanup.invokeOnCompletion {
