@@ -21,7 +21,7 @@
     <string name="label_quality">分辨率</string>
     <string name="label_bitrate">画质</string>
     <string name="label_orientation">方向</string>
-    <string name="label_frame_rate">帧率</string>
+    <string name="label_frame_rate">最高帧率</string>
     <string name="label_audio">音频</string>
 
     <!-- Content Descriptions -->
@@ -63,8 +63,8 @@
     <string name="screen_orientation_summary">生成的视频方向</string>
     <string name="audio_source">声音来源</string>
     <string name="audio_source_summary">是否录制系统内部声音或麦克风声音</string>
-    <string name="frame_rate">帧数</string>
-    <string name="frame_rate_summary">每秒钟录制的帧数，越高画越流畅</string>
+    <string name="frame_rate">最高帧率</string>
+    <string name="frame_rate_summary">录制不会超过该帧率，实际以系统输出帧率为准</string>
     <string name="video_codec">视频编码</string>
     <string name="video_codec_summary">H.265 支持 HDR 且更高效</string>
     <string name="show_touches">显示点按操作反馈</string>
@@ -73,6 +73,7 @@
     <string name="bypass_focus_island_summary">发送通知时临时断开 XMSF 网络以绕过系统白名单限制 (需要 Shizuku)\n状态: %1$s</string>
     <string name="shizuku_status_authorized">已授权</string>
     <string name="shizuku_status_not_authorized">未授权</string>
+    <string name="shizuku_status_tap_to_authorize">点击以授权</string>
     <string name="shizuku_status_not_running">未运行</string>
     <string name="tile_style">快捷磁贴图标样式</string>
     <string name="tile_style_summary">选择快捷设置磁贴的图标样式</string>
@@ -108,6 +109,7 @@
     <string name="orientation_landscape">横屏</string>
 
     <!-- Frame Rate Options -->
+    <string name="fps_auto">自动</string>
     <string name="fps_15">15 帧</string>
     <string name="fps_24">24 帧</string>
     <string name="fps_30">30 帧</string>

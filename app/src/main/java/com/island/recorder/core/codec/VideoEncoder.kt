@@ -17,6 +17,7 @@ class VideoEncoder(
     private val height: Int,
     private val bitrate: Int,
     private val frameRate: Int,
+    private val maxFpsToEncoder: Int? = frameRate,
     private val mimeType: String = MediaFormat.MIMETYPE_VIDEO_AVC,
     private val isHdrEnabled: Boolean = false
 ) {
@@ -66,12 +67,18 @@ class VideoEncoder(
                 )
                 setInteger(MediaFormat.KEY_BIT_RATE, bitrate)
                 setInteger(MediaFormat.KEY_FRAME_RATE, frameRate)
+                if (maxFpsToEncoder != null && maxFpsToEncoder > 0) {
+                    setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, maxFpsToEncoder.toFloat())
+                    setLong(
+                        MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER,
+                        1000000L / maxFpsToEncoder
+                    )
+                }
                 setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, I_FRAME_INTERVAL)
                 setInteger(
                     MediaFormat.KEY_BITRATE_MODE,
                     MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR
                 )
-                setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 1000000L / frameRate)
 
                 // H.265/HEVC: Use Main10 profile for 10-bit support if HDR is enabled
                 if (mimeType == MediaFormat.MIMETYPE_VIDEO_HEVC) {

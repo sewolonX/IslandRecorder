@@ -40,7 +40,7 @@ class AppSettingsRepositoryImpl(
                         prefs[AppDataStore.SCREEN_ORIENTATION],
                         ScreenOrientation.AUTO
                     ),
-                    frameRate = safeValueOf(prefs[AppDataStore.FRAME_RATE], FrameRate.FPS_30),
+                    frameRate = safeValueOf(prefs[AppDataStore.FRAME_RATE], FrameRate.AUTO),
                     audioSource = safeValueOf(prefs[AppDataStore.AUDIO_SOURCE], AudioSource.BOTH),
                     videoCodec = safeValueOf(prefs[AppDataStore.VIDEO_CODEC], VideoCodec.H264),
                     showTouches = prefs[AppDataStore.SHOW_TOUCHES] ?: false,

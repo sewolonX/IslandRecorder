@@ -12,8 +12,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.island.recorder.domain.device.model.PermissionType
+import com.island.recorder.domain.device.provider.PermissionChecker
 import com.island.recorder.domain.settings.model.AppPreferences
 import com.island.recorder.domain.settings.repository.AppSettingsRepository
+import com.island.recorder.ui.common.permission.PermissionRequester
 import com.island.recorder.ui.navigation.MiuixNavContainer
 import com.island.recorder.ui.theme.IslandRecorderTheme
 import com.island.recorder.ui.theme.LocalWindowLayoutInfo
@@ -24,6 +27,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 class MainActivity : ComponentActivity(), KoinComponent {
     private val appSettingsRepository by inject<AppSettingsRepository>()
+    private val permissionChecker by inject<PermissionChecker>()
+    private lateinit var permissionRequester: PermissionRequester
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
@@ -32,6 +37,13 @@ class MainActivity : ComponentActivity(), KoinComponent {
         splashScreen.setKeepOnScreenCondition { !isLoaded }
 
         super.onCreate(savedInstanceState)
+
+        permissionRequester = PermissionRequester(this, permissionChecker)
+        permissionRequester.requestPermissions(
+            setOf(PermissionType.RecordAudio, PermissionType.PostNotifications)
+        ) {
+            // Best-effort startup request; feature entry points handle denied permissions.
+        }
 
         setContent {
             val appPreferences by appSettingsRepository.preferencesFlow.collectAsStateWithLifecycle(

@@ -9,6 +9,7 @@ import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.view.Surface
 import android.view.WindowManager
+import kotlin.math.roundToInt
 
 /**
  * Manages MediaProjection for screen capture
@@ -97,6 +98,19 @@ class ScreenCaptureManager(private val context: Context) {
     }
 
     /**
+     * Get the highest refresh rate supported by the default display.
+     */
+    fun getMaxRefreshRate(): Int {
+        val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+        val display = displayManager.getDisplay(android.view.Display.DEFAULT_DISPLAY)
+            ?: return DEFAULT_REFRESH_RATE
+        return display.supportedModes
+            .maxOfOrNull { it.refreshRate.roundToInt() }
+            ?.coerceAtLeast(DEFAULT_REFRESH_RATE)
+            ?: DEFAULT_REFRESH_RATE
+    }
+
+    /**
      * Pause screen capture by disconnecting the surface
      */
     fun pause() {
@@ -134,5 +148,9 @@ class ScreenCaptureManager(private val context: Context) {
      */
     fun isActive(): Boolean {
         return mediaProjection != null
+    }
+
+    private companion object {
+        const val DEFAULT_REFRESH_RATE = 60
     }
 }

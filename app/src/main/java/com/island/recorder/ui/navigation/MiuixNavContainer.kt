@@ -19,8 +19,8 @@ import androidx.navigation3.ui.NavDisplay
 import androidx.navigation3.ui.NavDisplayTransitionEffects
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
-import com.island.recorder.ui.page.home.MiuixHomeRoute
-import com.island.recorder.ui.page.settings.MiuixSettingsPage
+import com.island.recorder.ui.page.home.HomePage
+import com.island.recorder.ui.page.settings.SettingsPage
 
 @Composable
 fun MiuixNavContainer() {
@@ -43,13 +43,13 @@ fun MiuixNavContainer() {
             ),
             entryProvider = entryProvider {
                 entry<Route.Home> {
-                    MiuixHomeRoute(
+                    HomePage(
                         onNavigateToSettings = { navigator.push(Route.Settings) }
                     )
                 }
 
                 entry<Route.Settings> {
-                    MiuixSettingsPage(
+                    SettingsPage(
                         onBack = { navigator.pop() }
                     )
                 }

@@ -60,13 +60,17 @@ enum class ScreenOrientation(@StringRes val labelResId: Int) {
  * Frame rate options
  */
 enum class FrameRate(val fps: Int, @StringRes val labelResId: Int) {
+    AUTO(0, R.string.fps_auto),
     FPS_15(15, R.string.fps_15),
     FPS_24(24, R.string.fps_24),
     FPS_30(30, R.string.fps_30),
     FPS_48(48, R.string.fps_48),
     FPS_60(60, R.string.fps_60),
     FPS_90(90, R.string.fps_90),
-    FPS_120(120, R.string.fps_120)
+    FPS_120(120, R.string.fps_120);
+
+    fun bitrateFps(autoFrameRateFps: Int): Int =
+        if (fps > 0) fps else autoFrameRateFps.coerceAtLeast(1)
 }
 
 /**
@@ -104,7 +108,7 @@ data class RecordingSettings(
     val videoQuality: VideoQuality = VideoQuality.FHD,
     val videoBitrate: VideoBitrate = VideoBitrate.AUTO,
     val screenOrientation: ScreenOrientation = ScreenOrientation.AUTO,
-    val frameRate: FrameRate = FrameRate.FPS_30,
+    val frameRate: FrameRate = FrameRate.AUTO,
     val audioSource: AudioSource = AudioSource.BOTH,
     val videoCodec: VideoCodec = VideoCodec.H264,
     val showTouches: Boolean = false,
@@ -114,14 +118,14 @@ data class RecordingSettings(
     /**
      * Calculate bitrate: fixed value if user chose one, otherwise auto-compute
      */
-    fun calculateBitrate(width: Int, height: Int): Int {
+    fun calculateBitrate(width: Int, height: Int, autoFrameRateFps: Int): Int {
         if (videoBitrate != VideoBitrate.AUTO) {
             return videoBitrate.bps
         }
         val pixels = width * height
         val motionFactor = 1.5f
         val qualityFactor = 0.12f
-        return (pixels * frameRate.fps * motionFactor * qualityFactor).toInt()
+        return (pixels * frameRate.bitrateFps(autoFrameRateFps) * motionFactor * qualityFactor).toInt()
     }
 }
 

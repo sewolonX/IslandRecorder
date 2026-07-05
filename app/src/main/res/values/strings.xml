@@ -22,7 +22,7 @@
     <string name="label_quality">Resolution</string>
     <string name="label_bitrate">Bitrate</string>
     <string name="label_orientation">Orientation</string>
-    <string name="label_frame_rate">Frame Rate</string>
+    <string name="label_frame_rate">Max Frame Rate</string>
     <string name="label_audio">Audio</string>
 
     <!-- Content Descriptions -->
@@ -64,8 +64,8 @@
     <string name="screen_orientation_summary">Output video orientation</string>
     <string name="audio_source">Audio Source</string>
     <string name="audio_source_summary">Whether to record internal audio or microphone</string>
-    <string name="frame_rate">Frame Rate</string>
-    <string name="frame_rate_summary">Frames per second. Higher means smoother video</string>
+    <string name="frame_rate">Max Frame Rate</string>
+    <string name="frame_rate_summary">Recording will not exceed this frame rate. Actual frame rate depends on system output</string>
     <string name="video_codec">Video Codec</string>
     <string name="video_codec_summary">H.265 supports HDR and is more efficient</string>
     <string name="show_touches">Show Screen Touches</string>
@@ -74,6 +74,7 @@
     <string name="bypass_focus_island_summary">Temporarily disconnect XMSF network when sending notifications to bypass system whitelist (Requires Shizuku)\nStatus: %1$s</string>
     <string name="shizuku_status_authorized">Authorized</string>
     <string name="shizuku_status_not_authorized">Not Authorized</string>
+    <string name="shizuku_status_tap_to_authorize">Tap to authorize</string>
     <string name="shizuku_status_not_running">Not Running</string>
     <string name="tile_style">Quick Tile Icon Style</string>
     <string name="tile_style_summary">Choose the icon style for the Quick Settings tile</string>
@@ -108,6 +109,7 @@
     <string name="orientation_landscape">Landscape</string>
 
     <!-- Frame Rate Options -->
+    <string name="fps_auto">Auto</string>
     <string name="fps_15">15 FPS</string>
     <string name="fps_24">24 FPS</string>
     <string name="fps_30">30 FPS</string>

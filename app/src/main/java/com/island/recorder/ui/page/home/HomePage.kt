@@ -68,12 +68,9 @@ import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
 @Composable
-fun MiuixHomePage(
-    viewModel: MiuixHomeViewModel = koinViewModel(),
-    title: String,
-    outerPadding: PaddingValues,
+fun HomePage(
+    viewModel: HomeViewModel = koinViewModel(),
     onNavigateToSettings: () -> Unit,
-    modifier: Modifier = Modifier
 ) {
     val uiState = viewModel.state.collectAsStateWithLifecycle().value
     val scrollBehavior = MiuixScrollBehavior()
@@ -94,12 +91,12 @@ fun MiuixHomePage(
     }
 
     Scaffold(
-        modifier = modifier,
+        modifier = Modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
                 modifier = Modifier.recorderMiuixBlurEffect(backdrop),
                 color = backdrop.getMiuixAppBarColor(),
-                title = title,
+                title = stringResource(R.string.home_title),
                 actions = {
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(
@@ -123,7 +120,7 @@ fun MiuixHomePage(
                 start = innerPadding.calculateStartPadding(layoutDirection) + 12.dp,
                 top = innerPadding.calculateTopPadding() + 12.dp,
                 end = innerPadding.calculateEndPadding(layoutDirection) + 12.dp,
-                bottom = outerPadding.calculateBottomPadding()
+                bottom = 0.dp
             ),
             overscrollEffect = null
         ) {

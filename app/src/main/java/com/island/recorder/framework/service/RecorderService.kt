@@ -221,12 +221,15 @@ class RecorderService : Service() {
                 }
 
                 // Initialize encoder
-                val bitrate = settings.calculateBitrate(width, height)
+                val maxRefreshRate = screenCaptureManager.getMaxRefreshRate()
+                val frameRate = settings.frameRate.fps.takeIf { it > 0 } ?: maxRefreshRate
+                val bitrate = settings.calculateBitrate(width, height, maxRefreshRate)
                 videoEncoder = VideoEncoder(
                     width,
                     height,
                     bitrate,
-                    settings.frameRate.fps,
+                    frameRate,
+                    maxFpsToEncoder = settings.frameRate.fps.takeIf { it > 0 },
                     mimeType = settings.videoCodec.mimeType,
                     isHdrEnabled = settings.videoCodec.isHdrEnabled
                 )

@@ -80,8 +80,8 @@ import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
 @Composable
-fun MiuixSettingsPage(
-    viewModel: MiuixSettingsViewModel = koinViewModel(),
+fun SettingsPage(
+    viewModel: SettingsViewModel = koinViewModel(),
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -218,7 +218,7 @@ fun MiuixSettingsPage(
                         title = stringResource(R.string.shizuku_status),
                         summary = when (capability.shizukuMode) {
                             ShizukuMode.Authorized -> stringResource(R.string.shizuku_status_authorized)
-                            ShizukuMode.NotAuthorized -> stringResource(R.string.shizuku_status_not_authorized)
+                            ShizukuMode.NotAuthorized -> stringResource(R.string.shizuku_status_tap_to_authorize)
                             ShizukuMode.NotRunning -> stringResource(R.string.shizuku_status_not_running)
                         },
                         onClick = {
