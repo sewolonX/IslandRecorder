@@ -1,0 +1,383 @@
+package com.island.recorder.ui.activity
+
+import android.content.Intent
+import android.media.projection.MediaProjectionManager
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import com.island.recorder.R
+import com.island.recorder.domain.recording.model.AudioSource
+import com.island.recorder.domain.recording.model.RecordingSettings
+import com.island.recorder.domain.recording.model.RecordingState
+import com.island.recorder.domain.device.model.PermissionType
+import com.island.recorder.domain.device.provider.PermissionChecker
+import com.island.recorder.domain.settings.repository.AppSettingsRepository
+import com.island.recorder.domain.settings.repository.BooleanSetting
+import com.island.recorder.domain.settings.repository.StringSetting
+import com.island.recorder.framework.privileged.provider.DeviceCapabilityProvider
+import com.island.recorder.framework.service.RecorderService
+import com.island.recorder.ui.common.permission.PermissionRequester
+import com.island.recorder.ui.theme.IslandRecorderTheme
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import org.koin.android.ext.android.inject
+import org.koin.compose.koinInject
+import timber.log.Timber
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.DropdownItem
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.VerticalDivider
+import top.yukonga.miuix.kmp.layout.DialogDefaults
+import top.yukonga.miuix.kmp.preference.SwitchPreference
+import top.yukonga.miuix.kmp.preference.WindowSpinnerPreference
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.window.WindowDialog
+
+class RecordingShortcutActivity : ComponentActivity() {
+
+    private val appSettingsRepo: AppSettingsRepository by inject()
+    private val permissionChecker: PermissionChecker by inject()
+    private lateinit var permissionRequester: PermissionRequester
+
+    private val mediaProjectionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK && result.data != null) {
+            lifecycleScope.launch {
+                val settings = appSettingsRepo.recordingSettingsFlow.first()
+                val intent = Intent(this@RecordingShortcutActivity, RecorderService::class.java).apply {
+                    action = RecorderService.ACTION_START_RECORDING
+                    putExtra(RecorderService.EXTRA_RESULT_CODE, result.resultCode)
+                    putExtra(RecorderService.EXTRA_RESULT_DATA, result.data)
+                    putExtra(RecorderService.EXTRA_SETTINGS, settings)
+                }
+                startService(intent)
+                finish()
+            }
+        } else {
+            Timber.tag("RecordingShortcut").w("MediaProjection permission denied")
+            finish()
+        }
+    }
+
+    private fun startRecording() {
+        lifecycleScope.launch {
+            val settings = appSettingsRepo.recordingSettingsFlow.first()
+            if (!hasPostNotificationsPermission()) {
+                Timber.tag("RecordingShortcut").w("Post notifications permission is required")
+                return@launch
+            }
+            if (settings.audioSource.usesMicrophone() && !hasRecordAudioPermission()) {
+                Timber.tag("RecordingShortcut")
+                    .w("Record audio permission is required for ${settings.audioSource}")
+                return@launch
+            }
+            launchMediaProjection()
+        }
+    }
+
+    private fun launchMediaProjection() {
+        val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        mediaProjectionLauncher.launch(manager.createScreenCaptureIntent())
+    }
+
+    private fun hasRecordAudioPermission(): Boolean =
+        permissionChecker.hasPermission(PermissionType.RecordAudio)
+
+    private fun hasPostNotificationsPermission(): Boolean =
+        permissionChecker.hasPermission(PermissionType.PostNotifications)
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        permissionRequester = PermissionRequester(this, permissionChecker)
+
+        if (RecorderService.recordingState.value !is RecordingState.Idle) {
+            finish()
+            return
+        }
+
+        var hasRecordAudioPermissionState by mutableStateOf(hasRecordAudioPermission())
+        var hasPostNotificationsPermissionState by mutableStateOf(hasPostNotificationsPermission())
+        if (!hasRecordAudioPermissionState || !hasPostNotificationsPermissionState) {
+            permissionRequester.requestPermissions(
+                setOf(PermissionType.RecordAudio, PermissionType.PostNotifications)
+            ) { results ->
+                hasRecordAudioPermissionState = results[PermissionType.RecordAudio] == true
+                hasPostNotificationsPermissionState =
+                    results[PermissionType.PostNotifications] == true
+            }
+        }
+
+        setContent {
+            IslandRecorderTheme {
+                val appSettingsRepo = koinInject<AppSettingsRepository>()
+                val capabilityProvider = koinInject<DeviceCapabilityProvider>()
+                val scope = rememberCoroutineScope()
+                val settings by appSettingsRepo.recordingSettingsFlow.collectAsStateWithLifecycle(
+                    RecordingSettings()
+                )
+                val capability by capabilityProvider.capabilityFlow.collectAsStateWithLifecycle()
+                val audioSourceRequiresPermission = settings.audioSource.usesMicrophone()
+                val permissionWarning = when {
+                    !hasPostNotificationsPermissionState ->
+                        R.string.permission_notifications_required
+
+                    audioSourceRequiresPermission && !hasRecordAudioPermissionState ->
+                        R.string.permission_audio_required
+
+                    else -> null
+                }
+                val canStart = permissionWarning == null
+
+                var showDialog by remember { mutableStateOf(true) }
+
+                val windowInfo = LocalWindowInfo.current
+                val density = LocalDensity.current
+                val containerSize = windowInfo.containerSize
+
+                val isLandscape = containerSize.width > containerSize.height
+                val windowWidth = with(density) { containerSize.width.toDp() }
+
+                val dialogMaxWidth = if (isLandscape) {
+                    (windowWidth - 48.dp)
+                        .coerceAtLeast(560.dp)
+                        .coerceAtMost(720.dp)
+                } else {
+                    DialogDefaults.MaxWidth
+                }
+
+                WindowDialog(
+                    show = showDialog,
+                    onDismissRequest = {
+                        showDialog = false
+                        finish()
+                    },
+                    title = if (!isLandscape) stringResource(R.string.dialog_record_title) else null,
+                    maxWidth = dialogMaxWidth
+                ) {
+                    if (isLandscape) {
+                        // Landscape: left(title+switches) | divider | right(buttons)
+                        Row(
+                            modifier = Modifier.height(IntrinsicSize.Min)
+                        ) {
+                            // Left: title + switches
+                            Column(
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.dialog_record_title),
+                                    style = MiuixTheme.textStyles.title4,
+                                    color = MiuixTheme.colorScheme.onBackground,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = stringResource(R.string.dialog_record_summary),
+                                    style = MiuixTheme.textStyles.body1,
+                                    color = MiuixTheme.colorScheme.onSurfaceSecondary
+                                )
+                                permissionWarning?.let {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = stringResource(it),
+                                        style = MiuixTheme.textStyles.body1,
+                                        color = MiuixTheme.colorScheme.onSurfaceSecondary
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(12.dp))
+                                RecordingAudioSourceSpinner(
+                                    settings = settings,
+                                    enabled = hasRecordAudioPermissionState,
+                                    onSelected = { source ->
+                                        scope.launch {
+                                            appSettingsRepo.putString(
+                                                StringSetting.AudioSource,
+                                                source.name
+                                            )
+                                        }
+                                    }
+                                )
+                                ShowTouchesSwitch(
+                                    settings = settings,
+                                    enabled = capability.hasPrivilegedOperations,
+                                    onCheckedChange = {
+                                        scope.launch {
+                                            appSettingsRepo.putBoolean(
+                                                BooleanSetting.ShowTouches,
+                                                it
+                                            )
+                                        }
+                                    }
+                                )
+                            }
+
+                            // Divider
+                            VerticalDivider(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .padding(horizontal = 16.dp)
+                            )
+
+                            // Right: buttons stacked vertically
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight(),
+                                verticalArrangement = Arrangement.spacedBy(
+                                    8.dp,
+                                    Alignment.CenterVertically
+                                )
+                            ) {
+                                TextButton(
+                                    text = stringResource(R.string.cancel),
+                                    onClick = {
+                                        showDialog = false
+                                        finish()
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                TextButton(
+                                    text = stringResource(R.string.dialog_record_start),
+                                    onClick = {
+                                        showDialog = false
+                                        startRecording()
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enabled = canStart,
+                                    colors = ButtonDefaults.textButtonColorsPrimary()
+                                )
+                            }
+                        }
+                    } else {
+                        // Portrait: original layout
+                        Column {
+                            Text(
+                                text = stringResource(R.string.dialog_record_summary),
+                                style = MiuixTheme.textStyles.body1,
+                                color = MiuixTheme.colorScheme.onSurfaceSecondary
+                            )
+                            permissionWarning?.let {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = stringResource(it),
+                                    style = MiuixTheme.textStyles.body1,
+                                    color = MiuixTheme.colorScheme.onSurfaceSecondary
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            RecordingAudioSourceSpinner(
+                                settings = settings,
+                                enabled = hasRecordAudioPermissionState,
+                                onSelected = { source ->
+                                    scope.launch {
+                                        appSettingsRepo.putString(
+                                            StringSetting.AudioSource,
+                                            source.name
+                                        )
+                                    }
+                                }
+                            )
+                            ShowTouchesSwitch(
+                                settings = settings,
+                                enabled = capability.hasPrivilegedOperations,
+                                onCheckedChange = {
+                                    scope.launch {
+                                        appSettingsRepo.putBoolean(BooleanSetting.ShowTouches, it)
+                                    }
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                TextButton(
+                                    text = stringResource(R.string.cancel),
+                                    onClick = {
+                                        showDialog = false
+                                        finish()
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                TextButton(
+                                    text = stringResource(R.string.dialog_record_start),
+                                    onClick = {
+                                        showDialog = false
+                                        startRecording()
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    enabled = canStart,
+                                    colors = ButtonDefaults.textButtonColorsPrimary()
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun AudioSource.usesMicrophone(): Boolean =
+        this == AudioSource.MICROPHONE || this == AudioSource.BOTH
+}
+
+@Composable
+private fun ShowTouchesSwitch(
+    settings: RecordingSettings,
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    SwitchPreference(
+        title = stringResource(R.string.show_touches),
+        summary = if (!enabled) stringResource(R.string.permission_privilege) else null,
+        checked = settings.showTouches,
+        insideMargin = PaddingValues(0.dp),
+        enabled = enabled,
+        onCheckedChange = onCheckedChange
+    )
+}
+
+@Composable
+private fun RecordingAudioSourceSpinner(
+    settings: RecordingSettings,
+    enabled: Boolean,
+    onSelected: (AudioSource) -> Unit
+) {
+    WindowSpinnerPreference(
+        title = stringResource(R.string.audio_source),
+        summary = if (!enabled) stringResource(R.string.permission_audio_required) else null,
+        items = AudioSource.entries.map {
+            DropdownItem(text = stringResource(it.labelResId))
+        },
+        selectedIndex = AudioSource.entries.indexOf(settings.audioSource),
+        insideMargin = PaddingValues(0.dp),
+        enabled = enabled,
+        onSelectedIndexChange = { onSelected(AudioSource.entries[it]) }
+    )
+}

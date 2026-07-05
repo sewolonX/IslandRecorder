@@ -8,8 +8,8 @@ import android.media.AudioRecord
 import android.media.projection.MediaProjection
 import android.media.MediaRecorder
 import android.os.Build
-import android.util.Log
-import com.island.recorder.data.AudioSource
+import timber.log.Timber
+import com.island.recorder.domain.recording.model.AudioSource
 
 /**
  * Handles Audio capture (Mic, System Internal, or Both)
@@ -24,7 +24,6 @@ class AudioRecorder {
     private var currentAudioSource: AudioSource = AudioSource.NONE
     
     companion object {
-        private const val TAG = "AudioRecorder"
         private const val SAMPLE_RATE = 44100
         private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_STEREO
         private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
@@ -40,7 +39,7 @@ class AudioRecorder {
         currentAudioSource = audioSource
         
         if (audioSource == AudioSource.NONE) {
-            Log.d(TAG, "Audio source is NONE, skipping audio recording")
+            Timber.d("Audio source is NONE, skipping audio recording")
             return true // Not an error, just no audio
         }
         
@@ -63,9 +62,9 @@ class AudioRecorder {
                 if (micRecorder?.state == AudioRecord.STATE_INITIALIZED) {
                     micRecorder?.startRecording()
                     micSuccess = true
-                    Log.d(TAG, "Initialized Microphone Recorder")
+                    Timber.d("Initialized Microphone Recorder")
                 } else {
-                    Log.e(TAG, "Microphone AudioRecord not initialized")
+                    Timber.e("Microphone AudioRecord not initialized")
                     micRecorder?.release()
                     micRecorder = null
                 }
@@ -97,14 +96,14 @@ class AudioRecorder {
                 if (internalRecorder?.state == AudioRecord.STATE_INITIALIZED) {
                     internalRecorder?.startRecording()
                     internalSuccess = true
-                    Log.d(TAG, "Initialized System Audio Recorder")
+                    Timber.d("Initialized System Audio Recorder")
                 } else {
-                    Log.e(TAG, "Internal AudioRecord not initialized")
+                    Timber.e("Internal AudioRecord not initialized")
                     internalRecorder?.release()
                     internalRecorder = null
                 }
             } else if (audioSource == AudioSource.INTERNAL && Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-                Log.e(TAG, "Internal audio capture requires Android 10 (Q) or higher")
+                Timber.e("Internal audio capture requires Android 10 (Q) or higher")
             }
             
             // Determine overall success
@@ -117,17 +116,17 @@ class AudioRecorder {
             
             if (success) {
                 isRecording = true
-                Log.d(TAG, "Audio recording started: $audioSource (Mic: $micSuccess, Internal: $internalSuccess)")
+                Timber.d("Audio recording started: $audioSource (Mic: $micSuccess, Internal: $internalSuccess)")
             } else {
                 // Clean up if failed
                 stop()
-                Log.e(TAG, "Failed to start any audio recorder")
+                Timber.e("Failed to start any audio recorder")
             }
             
             return success
             
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start AudioRecorder", e)
+            Timber.e(e, "Failed to start AudioRecorder")
             stop()
             return false
         }
@@ -215,20 +214,21 @@ class AudioRecorder {
             micRecorder?.stop()
             micRecorder?.release()
             micRecorder = null
-            Log.d(TAG, "Microphone recorder stopped")
+            Timber.d("Microphone recorder stopped")
         } catch (e: Exception) {
-            Log.e(TAG, "Error stopping microphone recorder", e)
+            Timber.e(e, "Error stopping microphone recorder")
         }
         
         try {
             internalRecorder?.stop()
             internalRecorder?.release()
             internalRecorder = null
-            Log.d(TAG, "Internal audio recorder stopped")
+            Timber.d("Internal audio recorder stopped")
         } catch (e: Exception) {
-            Log.e(TAG, "Error stopping internal recorder", e)
+            Timber.e(e, "Error stopping internal recorder")
         }
         
-        Log.d(TAG, "AudioRecorder stopped")
+        Timber.d("AudioRecorder stopped")
     }
 }
+

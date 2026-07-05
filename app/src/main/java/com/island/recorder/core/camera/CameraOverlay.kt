@@ -20,7 +20,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import com.island.recorder.R
-import com.island.recorder.service.FloatingControlService
+import com.island.recorder.framework.service.FloatingControlService
 import kotlin.math.abs
 
 /**
@@ -158,3 +158,4 @@ class CameraOverlay(private val context: Context) : LifecycleOwner {
         }
     }
 }
+

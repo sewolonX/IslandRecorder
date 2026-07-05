@@ -1,19 +1,20 @@
 package com.island.recorder.core.codec
 
 import android.media.MediaCodec
-import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.media.MediaMuxer
-import android.os.Build
-import android.util.Log
-import java.io.File
+import timber.log.Timber
+import java.io.FileDescriptor
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
  * Combines video and audio tracks into MP4 container with HDR metadata support
  */
-class MediaMuxerWrapper(private val outputFile: File) {
+class MediaMuxerWrapper(
+    private val output: FileDescriptor,
+    private val displayName: String
+) {
 
     private var mediaMuxer: MediaMuxer? = null
     private var videoTrackIndex = -1
@@ -23,12 +24,10 @@ class MediaMuxerWrapper(private val outputFile: File) {
     private var audioFormatReceived = false
     private var videoFormat: MediaFormat? = null
 
-    companion object {
-        private const val TAG = "MediaMuxerWrapper"
-
+    private companion object {
         // HDR transfer functions (matching MediaFormat constants)
-        private const val COLOR_TRANSFER_HLG = 7
-        private const val COLOR_TRANSFER_PQ = 6
+        const val COLOR_TRANSFER_HLG = 7
+        const val COLOR_TRANSFER_PQ = 6
     }
 
     /**
@@ -37,12 +36,12 @@ class MediaMuxerWrapper(private val outputFile: File) {
     fun prepare() {
         try {
             mediaMuxer = MediaMuxer(
-                outputFile.absolutePath,
+                output,
                 MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4
             )
-            Log.d(TAG, "MediaMuxer initialized: ${outputFile.absolutePath}")
+            Timber.d("MediaMuxer initialized: $displayName")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize MediaMuxer", e)
+            Timber.e(e, "Failed to initialize MediaMuxer")
             throw e
         }
     }
@@ -57,13 +56,11 @@ class MediaMuxerWrapper(private val outputFile: File) {
         videoFormat = format
 
         // Add HDR metadata for H.265/HEVC if HDR is active
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            injectHdrMetadata(format)
-        }
+        injectHdrMetadata(format)
 
         videoTrackIndex = muxer.addTrack(format)
         videoFormatReceived = true
-        Log.d(TAG, "Video track added: $videoTrackIndex, HDR=${isHdrFormat(format)}")
+        Timber.d("Video track added: $videoTrackIndex, HDR=${isHdrFormat(format)}")
 
         tryStartMuxer()
         return videoTrackIndex
@@ -76,38 +73,36 @@ class MediaMuxerWrapper(private val outputFile: File) {
         if (!format.containsKey(MediaFormat.KEY_COLOR_TRANSFER)) return
 
         val transfer = format.getInteger(MediaFormat.KEY_COLOR_TRANSFER)
-        
+
         // ONLY inject static metadata for PQ (ST2084). 
         // Adding static metadata to HLG is non-standard and causes severe color shifts 
         // because decoders try to tone-map HLG as if it were PQ.
         if (transfer != COLOR_TRANSFER_PQ) return
 
-        Log.d(TAG, "Injecting static metadata for PQ content")
+        Timber.d("Injecting static metadata for PQ content")
 
         // HDR metadata using KEY_HDR_STATIC_INFO (API 24+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            // Mastering display color volume (Rec. ITU-R BT.2020)
-            // G(8500, 39850), B(65535, 2300), R(35400, 14600), White(15635, 16450), L(10000000, 50)
-            val masteringData = createMasteringDisplayData(
-                rX = 35400, rY = 14600,
-                gX = 8500, gY = 39850,
-                bX = 65535, bY = 2300,
-                whiteX = 15635, whiteY = 16450,
-                maxLum = 10000000, minLum = 50
-            )
+        // Mastering display color volume (Rec. ITU-R BT.2020)
+        // G(8500, 39850), B(65535, 2300), R(35400, 14600), White(15635, 16450), L(10000000, 50)
+        val masteringData = createMasteringDisplayData(
+            rX = 35400, rY = 14600,
+            gX = 8500, gY = 39850,
+            bX = 65535, bY = 2300,
+            whiteX = 15635, whiteY = 16450,
+            maxLum = 10000000, minLum = 50
+        )
 
-            // Content light level (MaxCLL, MaxFALL)
-            val contentLightData = createContentLightLevelData(maxCLL = 1000, maxFALL = 400)
+        // Content light level (MaxCLL, MaxFALL)
+        val contentLightData = createContentLightLevelData(maxCLL = 1000, maxFALL = 400)
 
-            // Combine descriptors into one ByteBuffer
-            val staticInfo = ByteBuffer.allocate(masteringData.limit() + contentLightData.limit())
-            staticInfo.order(ByteOrder.LITTLE_ENDIAN)
-            staticInfo.put(masteringData)
-            staticInfo.put(contentLightData)
-            staticInfo.flip()
+        // Combine descriptors into one ByteBuffer
+        val staticInfo = ByteBuffer.allocate(masteringData.limit() + contentLightData.limit())
+        staticInfo.order(ByteOrder.LITTLE_ENDIAN)
+        staticInfo.put(masteringData)
+        staticInfo.put(contentLightData)
+        staticInfo.flip()
 
-            format.setByteBuffer(MediaFormat.KEY_HDR_STATIC_INFO, staticInfo)
-        }
+        format.setByteBuffer(MediaFormat.KEY_HDR_STATIC_INFO, staticInfo)
     }
 
     /**
@@ -151,21 +146,21 @@ class MediaMuxerWrapper(private val outputFile: File) {
         val transfer = format.getInteger(MediaFormat.KEY_COLOR_TRANSFER)
         return transfer == COLOR_TRANSFER_HLG || transfer == COLOR_TRANSFER_PQ
     }
-    
+
     /**
      * Add audio track
      */
     fun addAudioTrack(format: MediaFormat): Int {
         val muxer = mediaMuxer ?: throw IllegalStateException("Muxer not initialized")
-        
+
         audioTrackIndex = muxer.addTrack(format)
         audioFormatReceived = true
-        Log.d(TAG, "Audio track added: $audioTrackIndex")
-        
+        Timber.d("Audio track added: $audioTrackIndex")
+
         tryStartMuxer()
         return audioTrackIndex
     }
-    
+
     private var expectAudio = false
     private var timestampOffsetUs = 0L
     private var pauseStartUs = 0L
@@ -193,7 +188,7 @@ class MediaMuxerWrapper(private val outputFile: File) {
     fun setAudioExpected(expected: Boolean) {
         expectAudio = expected
     }
-    
+
     /**
      * Start muxer when all tracks are added
      */
@@ -202,58 +197,62 @@ class MediaMuxerWrapper(private val outputFile: File) {
             // Start muxer when video track is ready (audio is optional)
             mediaMuxer?.start()
             isMuxerStarted = true
-            Log.d(TAG, "MediaMuxer started")
+            Timber.d("MediaMuxer started")
         }
     }
-    
+
     /**
      * Write video sample
      */
     fun writeVideoSample(buffer: ByteBuffer, bufferInfo: MediaCodec.BufferInfo) {
         if (!isMuxerStarted) {
-            Log.w(TAG, "Muxer not started, dropping video sample")
+            Timber.w("Muxer not started, dropping video sample")
             return
         }
-        
+
         if (videoTrackIndex < 0) {
-            Log.w(TAG, "Video track not added, dropping sample")
+            Timber.w("Video track not added, dropping sample")
             return
         }
-        
+
         try {
             val adjusted = MediaCodec.BufferInfo()
-            adjusted.set(bufferInfo.offset, bufferInfo.size,
-                bufferInfo.presentationTimeUs - timestampOffsetUs, bufferInfo.flags)
+            adjusted.set(
+                bufferInfo.offset, bufferInfo.size,
+                bufferInfo.presentationTimeUs - timestampOffsetUs, bufferInfo.flags
+            )
             mediaMuxer?.writeSampleData(videoTrackIndex, buffer, adjusted)
         } catch (e: Exception) {
-            Log.e(TAG, "Error writing video sample", e)
+            Timber.e(e, "Error writing video sample")
         }
     }
-    
+
     /**
      * Write audio sample
      */
     fun writeAudioSample(buffer: ByteBuffer, bufferInfo: MediaCodec.BufferInfo) {
         if (!isMuxerStarted) {
-            Log.w(TAG, "Muxer not started, dropping audio sample")
+            Timber.w("Muxer not started, dropping audio sample")
             return
         }
-        
+
         if (audioTrackIndex < 0) {
-            Log.w(TAG, "Audio track not added, dropping sample")
+            Timber.w("Audio track not added, dropping sample")
             return
         }
-        
+
         try {
             val adjusted = MediaCodec.BufferInfo()
-            adjusted.set(bufferInfo.offset, bufferInfo.size,
-                bufferInfo.presentationTimeUs - timestampOffsetUs, bufferInfo.flags)
+            adjusted.set(
+                bufferInfo.offset, bufferInfo.size,
+                bufferInfo.presentationTimeUs - timestampOffsetUs, bufferInfo.flags
+            )
             mediaMuxer?.writeSampleData(audioTrackIndex, buffer, adjusted)
         } catch (e: Exception) {
-            Log.e(TAG, "Error writing audio sample", e)
+            Timber.e(e, "Error writing audio sample")
         }
     }
-    
+
     /**
      * Stop and release muxer
      */
@@ -263,16 +262,16 @@ class MediaMuxerWrapper(private val outputFile: File) {
                 mediaMuxer?.stop()
                 isMuxerStarted = false
             }
-            
+
             mediaMuxer?.release()
             mediaMuxer = null
-            
-            Log.d(TAG, "MediaMuxer released")
+
+            Timber.d("MediaMuxer released")
         } catch (e: Exception) {
-            Log.e(TAG, "Error releasing MediaMuxer", e)
+            Timber.e(e, "Error releasing MediaMuxer")
         }
     }
-    
+
     /**
      * Check if muxer is started
      */

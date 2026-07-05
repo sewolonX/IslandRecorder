@@ -7,7 +7,6 @@ import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
-import android.util.DisplayMetrics
 import android.view.Surface
 import android.view.WindowManager
 
@@ -15,18 +14,10 @@ import android.view.WindowManager
  * Manages MediaProjection for screen capture
  */
 class ScreenCaptureManager(private val context: Context) {
-    
+
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
-    
-    private val displayMetrics: DisplayMetrics
-        get() {
-            val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            val metrics = DisplayMetrics()
-            windowManager.defaultDisplay.getRealMetrics(metrics)
-            return metrics
-        }
-    
+
     private val projectionCallback = object : MediaProjection.Callback() {
         override fun onStop() {
             // Handle cleanup if projection stops unexpectedly
@@ -40,28 +31,28 @@ class ScreenCaptureManager(private val context: Context) {
      * Create intent for MediaProjection permission request
      */
     fun createScreenCaptureIntent(): Intent {
-        val projectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) 
-            as MediaProjectionManager
+        val projectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE)
+                as MediaProjectionManager
         return projectionManager.createScreenCaptureIntent()
     }
-    
+
     /**
      * Initialize MediaProjection from permission result
      */
     fun initializeProjection(resultCode: Int, data: Intent): Boolean {
-        if (resultCode != Activity.RESULT_OK || data == null) {
+        if (resultCode != Activity.RESULT_OK) {
             return false
         }
-        
-        val projectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) 
-            as MediaProjectionManager
-        
+
+        val projectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE)
+                as MediaProjectionManager
+
         mediaProjection = projectionManager.getMediaProjection(resultCode, data)
         mediaProjection?.registerCallback(projectionCallback, null)
-        
+
         return mediaProjection != null
     }
-    
+
     /**
      * Create virtual display for recording
      */
@@ -72,7 +63,7 @@ class ScreenCaptureManager(private val context: Context) {
         densityDpi: Int
     ): VirtualDisplay? {
         val projection = mediaProjection ?: return null
-        
+
         virtualDisplay = projection.createVirtualDisplay(
             "FluxRecorder",
             width,
@@ -83,25 +74,28 @@ class ScreenCaptureManager(private val context: Context) {
             null,
             null
         )
-        
+
         return virtualDisplay
     }
-    
+
+    private val windowManager: WindowManager
+        get() = context.getSystemService(WindowManager::class.java)
+
     /**
      * Get screen dimensions
      */
     fun getScreenDimensions(): Pair<Int, Int> {
-        val metrics = displayMetrics
-        return Pair(metrics.widthPixels, metrics.heightPixels)
+        val bounds = windowManager.currentWindowMetrics.bounds
+        return bounds.width() to bounds.height()
     }
-    
+
     /**
      * Get screen density
      */
     fun getScreenDensity(): Int {
-        return displayMetrics.densityDpi
+        return context.resources.configuration.densityDpi
     }
-    
+
     /**
      * Pause screen capture by disconnecting the surface
      */
@@ -122,12 +116,12 @@ class ScreenCaptureManager(private val context: Context) {
     fun stop() {
         virtualDisplay?.release()
         virtualDisplay = null
-        
+
         mediaProjection?.unregisterCallback(projectionCallback)
         mediaProjection?.stop()
         mediaProjection = null
     }
-    
+
     /**
      * Get the underlying MediaProjection instance
      */

@@ -3,9 +3,8 @@ package com.island.recorder.core.codec
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
-import android.os.Build
 import android.os.Bundle
-import android.util.Log
+import timber.log.Timber
 import android.view.Surface
 import java.nio.ByteBuffer
 
@@ -29,19 +28,18 @@ class VideoEncoder(
     var isHdrActive: Boolean = false
         private set
 
-    companion object {
-        private const val TAG = "VideoEncoder"
-        private const val I_FRAME_INTERVAL = 2
-        private const val TIMEOUT_US = 10000L
+    private companion object {
+        const val I_FRAME_INTERVAL = 2
+        const val TIMEOUT_US = 10000L
 
         // HDR color space constants (matching MediaFormat values)
-        private const val COLOR_STANDARD_BT709 = 1
-        private const val COLOR_STANDARD_BT2020 = 6
-        private const val COLOR_TRANSFER_SDR = 3
-        private const val COLOR_TRANSFER_HLG = 7
-        private const val COLOR_TRANSFER_PQ = 6
-        private const val COLOR_RANGE_LIMITED = 2
-        private const val COLOR_RANGE_FULL = 1
+        const val COLOR_STANDARD_BT709 = 1
+        const val COLOR_STANDARD_BT2020 = 6
+        const val COLOR_TRANSFER_SDR = 3
+        const val COLOR_TRANSFER_HLG = 7
+        const val COLOR_TRANSFER_PQ = 6
+        const val COLOR_RANGE_LIMITED = 2
+        const val COLOR_RANGE_FULL = 1
     }
 
     /**
@@ -62,32 +60,39 @@ class VideoEncoder(
     fun prepare(): Surface? {
         try {
             val format = MediaFormat.createVideoFormat(mimeType, width, height).apply {
-                setInteger(MediaFormat.KEY_COLOR_FORMAT,
-                    MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
+                setInteger(
+                    MediaFormat.KEY_COLOR_FORMAT,
+                    MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
+                )
                 setInteger(MediaFormat.KEY_BIT_RATE, bitrate)
                 setInteger(MediaFormat.KEY_FRAME_RATE, frameRate)
                 setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, I_FRAME_INTERVAL)
-                setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
+                setInteger(
+                    MediaFormat.KEY_BITRATE_MODE,
+                    MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR
+                )
                 setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 1000000L / frameRate)
 
                 // H.265/HEVC: Use Main10 profile for 10-bit support if HDR is enabled
                 if (mimeType == MediaFormat.MIMETYPE_VIDEO_HEVC) {
-                    if (isHdrEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.HEVCProfileMain10)
-                        
+                    if (isHdrEnabled) {
+                        setInteger(
+                            MediaFormat.KEY_PROFILE,
+                            MediaCodecInfo.CodecProfileLevel.HEVCProfileMain10
+                        )
+
                         // For Global HDR, we use HLG but with FULL range to match the screen's output.
                         applyHdrConfig(HdrConfig.HDR_HLG)
                         isHdrActive = true
-                        
-                        Log.d(TAG, "Global HDR mode: HEVC Main10 + BT.2020 + HLG + FULL RANGE")
-                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.HEVCProfileMain)
+
+                        Timber.d("Global HDR mode: HEVC Main10 + BT.2020 + HLG + FULL RANGE")
+                    } else
+                        setInteger(
+                            MediaFormat.KEY_PROFILE,
+                            MediaCodecInfo.CodecProfileLevel.HEVCProfileMain
+                        )
                         applyHdrConfig(HdrConfig.SDR)
-                        Log.d(TAG, "HEVC Main profile enabled (8-bit)")
-                    } else {
-                        setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.HEVCProfileMain)
-                        Log.d(TAG, "HEVC Main profile enabled (8-bit, API < 29)")
-                    }
+                        Timber.d("HEVC Main profile enabled (8-bit)")
                 }
             }
 
@@ -97,11 +102,12 @@ class VideoEncoder(
                 start()
             }
 
-            Log.d(TAG, "Video encoder initialized: ${width}x${height} @ ${frameRate}fps, ${bitrate}bps, codec=$mimeType")
+            Timber.d("Video encoder initialized: ${width}x${height} @ ${frameRate}fps, ${bitrate}bps, codec=$mimeType"
+            )
             return inputSurface
 
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize video encoder", e)
+            Timber.e(e, "Failed to initialize video encoder")
             release()
             return null
         }
@@ -111,11 +117,9 @@ class VideoEncoder(
      * Apply HDR color space configuration to the format
      */
     private fun MediaFormat.applyHdrConfig(config: HdrConfig) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            setInteger(MediaFormat.KEY_COLOR_STANDARD, config.standard)
-            setInteger(MediaFormat.KEY_COLOR_TRANSFER, config.transfer)
-            setInteger(MediaFormat.KEY_COLOR_RANGE, config.range)
-        }
+        setInteger(MediaFormat.KEY_COLOR_STANDARD, config.standard)
+        setInteger(MediaFormat.KEY_COLOR_TRANSFER, config.transfer)
+        setInteger(MediaFormat.KEY_COLOR_RANGE, config.range)
     }
 
     /**
@@ -123,7 +127,6 @@ class VideoEncoder(
      * Call this when HDR state changes
      */
     fun updateColorSpace(hdrConfig: HdrConfig) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
 
         val newIsHdr = hdrConfig !== HdrConfig.SDR
         if (newIsHdr == isHdrActive) return // No change needed
@@ -139,15 +142,14 @@ class VideoEncoder(
             val iFrameParams = Bundle()
             iFrameParams.putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0)
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                mediaCodec?.setParameters(iFrameParams)
-                mediaCodec?.setParameters(params)
-            }
+            mediaCodec?.setParameters(iFrameParams)
+            mediaCodec?.setParameters(params)
 
             isHdrActive = newIsHdr
-            Log.d(TAG, "Color space updated: HDR=$isHdrActive (standard=${hdrConfig.standard}, transfer=${hdrConfig.transfer})")
+            Timber.d("Color space updated: HDR=$isHdrActive (standard=${hdrConfig.standard}, transfer=${hdrConfig.transfer})"
+            )
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to update color space", e)
+            Timber.e(e, "Failed to update color space")
         }
     }
 
@@ -166,7 +168,9 @@ class VideoEncoder(
     }
 
     sealed interface EncoderOutput {
-        data class Data(val buffer: ByteBuffer, val info: MediaCodec.BufferInfo, val index: Int) : EncoderOutput
+        data class Data(val buffer: ByteBuffer, val info: MediaCodec.BufferInfo, val index: Int) :
+            EncoderOutput
+
         data class FormatChanged(val format: MediaFormat) : EncoderOutput
         object TryAgain : EncoderOutput
     }
@@ -186,20 +190,23 @@ class VideoEncoder(
                     EncoderOutput.TryAgain
                 }
             }
+
             outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                 val newFormat = codec.outputFormat
-                Log.d(TAG, "Output format changed: $newFormat")
+                Timber.d("Output format changed: $newFormat")
                 // Check if format contains HDR info
                 if (newFormat.containsKey(MediaFormat.KEY_COLOR_TRANSFER)) {
                     val transfer = newFormat.getInteger(MediaFormat.KEY_COLOR_TRANSFER)
                     isHdrActive = (transfer == COLOR_TRANSFER_HLG || transfer == COLOR_TRANSFER_PQ)
-                    Log.d(TAG, "Format change indicates HDR=$isHdrActive")
+                    Timber.d("Format change indicates HDR=$isHdrActive")
                 }
                 EncoderOutput.FormatChanged(newFormat)
             }
+
             outputBufferIndex == MediaCodec.INFO_TRY_AGAIN_LATER -> {
                 EncoderOutput.TryAgain
             }
+
             else -> EncoderOutput.TryAgain
         }
     }
@@ -212,7 +219,7 @@ class VideoEncoder(
         try {
             mediaCodec?.signalEndOfInputStream()
         } catch (e: Exception) {
-            Log.e(TAG, "Error signaling end of stream", e)
+            Timber.e(e, "Error signaling end of stream")
         }
     }
 
@@ -229,9 +236,9 @@ class VideoEncoder(
             mediaCodec?.release()
             mediaCodec = null
 
-            Log.d(TAG, "Video encoder released")
+            Timber.d("Video encoder released")
         } catch (e: Exception) {
-            Log.e(TAG, "Error releasing video encoder", e)
+            Timber.e(e, "Error releasing video encoder")
         }
     }
 

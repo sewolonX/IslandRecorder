@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Island Recorder</string>
 
     <!-- Quick Tile -->
     <string name="quick_tile_label">屏幕录制</string>
@@ -8,7 +7,6 @@
     <string name="tile_stop_recording">停止录制</string>
 
     <!-- Home Screen -->
-    <string name="home_title">Island Recorder</string>
     <string name="status_ready">准备录制</string>
     <string name="status_recording">录制中</string>
     <string name="status_paused">已暂停</string>
@@ -33,9 +31,29 @@
     <!-- Settings -->
     <string name="settings">设置</string>
     <string name="section_status">状态</string>
+    <string name="section_interface">界面</string>
+    <string name="personalization">个性化</string>
+    <string name="theme_settings">主题设置</string>
+    <string name="theme_settings_desc">Miuix 主题、模糊、动态色和浮动底栏</string>
+    <string name="theme_settings_miuix_ui">Miuix 界面</string>
+    <string name="theme_settings_theme_mode">主题模式</string>
+    <string name="theme_settings_theme_mode_light">浅色</string>
+    <string name="theme_settings_theme_mode_dark">深色</string>
+    <string name="theme_settings_theme_mode_system">跟随系统</string>
+    <string name="authorization_status">授权状态</string>
+    <string name="authorization_status_active">特权访问已激活</string>
+    <string name="authorization_status_active_desc">Root 或 Shizuku 操作可用</string>
+    <string name="authorization_status_inactive">特权访问未激活</string>
+    <string name="authorization_status_inactive_desc">点击选择或授权 Root/Shizuku</string>
+    <string name="authorization_method">授权方式</string>
+    <string name="authorization_method_root">Root</string>
+    <string name="authorization_method_shizuku">Shizuku</string>
+    <string name="root_status">Root 状态</string>
+    <string name="root_status_inactive">未激活</string>
+    <string name="shizuku_status">Shizuku 状态</string>
     <string name="section_recording">屏幕录制</string>
     <string name="grant_project_media">授予投影媒体权限</string>
-    <string name="grant_project_media_summary">自动绕过系统录屏授权弹窗 (需要 Root/Shizuku)</string>
+    <string name="grant_project_media_summary">自动绕过系统录屏授权弹窗</string>
     <string name="project_media_already_granted">权限已授予</string>
     <string name="video_quality">分辨率</string>
     <string name="video_quality_summary">视频的宽、高像素数，越高视频越清晰</string>
@@ -49,9 +67,9 @@
     <string name="frame_rate_summary">每秒钟录制的帧数，越高画越流畅</string>
     <string name="video_codec">视频编码</string>
     <string name="video_codec_summary">H.265 支持 HDR 且更高效</string>
-    <string name="show_touches">显示屏幕触摸</string>
-    <string name="show_touches_summary">手指点击的地方显示小白点 (需要 Root)</string>
-    <string name="bypass_focus_island">绕过小米超级岛白名单 (不可用)</string>
+    <string name="show_touches">显示点按操作反馈</string>
+    <string name="show_touches_summary">显示点按操作的视觉反馈</string>
+    <string name="bypass_focus_island">绕过小米超级岛白名单</string>
     <string name="bypass_focus_island_summary">发送通知时临时断开 XMSF 网络以绕过系统白名单限制 (需要 Shizuku)\n状态: %1$s</string>
     <string name="shizuku_status_authorized">已授权</string>
     <string name="shizuku_status_not_authorized">未授权</string>
@@ -109,7 +127,11 @@
     <string name="audio_microphone">麦克风声音</string>
     <string name="audio_both">系统内+麦克风声音</string>
 
+    <string name="permission_required">需要权限</string>
+    <string name="permission_privilege">需要 Root 或 Shizuku</string>
     <string name="permission_audio">需要麦克风权限以录制音频</string>
+    <string name="permission_audio_required">需要录音权限</string>
+    <string name="permission_notifications_required">需要通知权限</string>
     <string name="permission_overlay">需要悬浮窗权限以使用浮动控件</string>
     <string name="permission_storage">需要存储权限以保存录制内容</string>
     <string name="grant_permission">授予权限</string>
@@ -151,7 +173,5 @@
     <!-- About -->
     <string name="section_about">关于</string>
     <string name="project_url">项目地址</string>
-    <string name="project_url_value">https://github.com/Leaf-lsgtky/IslandRecoder</string>
     <string name="original_project">原项目地址</string>
-    <string name="original_project_value">https://github.com/Icradle-Innovations-Ltd/FluxRecorder</string>
 </resources>

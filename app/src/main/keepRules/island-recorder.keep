@@ -1,0 +1,3 @@
+# BlockHound is not used on Android, but Netty's optional integration can be
+# referenced from transitive metadata during R8 analysis.
+-dontwarn reactor.blockhound.integration.BlockHoundIntegration

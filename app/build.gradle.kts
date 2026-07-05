@@ -1,39 +1,80 @@
+import java.util.Properties
+
 plugins {
-    alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.hilt.android)
+    alias(libs.plugins.island.application)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.compose.compiler)
     id("kotlin-parcelize")
 }
 
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+if (keystorePropertiesFile.isFile) {
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+}
+
+fun Properties.signingProperty(name: String): String? =
+    getProperty(name)?.takeIf { it.isNotBlank() }
+
+val localKeystoreFile = keystoreProperties.signingProperty("storeFile")
+val localKeystorePassword = keystoreProperties.signingProperty("storePassword")
+val localKeyAlias = keystoreProperties.signingProperty("keyAlias")
+val localKeyPassword = keystoreProperties.signingProperty("keyPassword")
+val hasLocalSigningConfig = listOf(
+    localKeystoreFile,
+    localKeystorePassword,
+    localKeyAlias,
+    localKeyPassword,
+).all { it != null }
+
+val envKeystoreFile = System.getenv("SIGNING_KEY")
+val envKeystorePassword = System.getenv("KEYSTORE_PASSWORD")
+val envAlias = System.getenv("ALIAS")
+val envKeyPassword = System.getenv("KEY_PASSWORD")
+val hasEnvSigningConfig = listOf(
+    envKeystoreFile,
+    envKeystorePassword,
+    envAlias,
+    envKeyPassword,
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.island.recorder"
-    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.island.recorder"
-        minSdk = 24
-        targetSdk = 35
-        versionCode = 5
-        versionName = "1.2.0"
+        
+        // Version control retrieved from git, with a build-plugin fallback when git is unavailable.
+        versionCode = project.getGitCommitCount()
+        versionName = project.getBaseVersionName()
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        
-        vectorDrawables {
-            useSupportLibrary = true
+    }
+
+    flavorDimensions.addAll(listOf("level"))
+
+    productFlavors {
+        create("Unstable") {
+            dimension = "level"
+            isDefault = true
+            versionNameSuffix = ".${project.getGitHash()}"
+        }
+
+        create("Stable") {
+            dimension = "level"
         }
     }
 
     signingConfigs {
         create("release") {
-            // Read from environment variables (GitHub Secrets)
-            val envKeystoreFile = System.getenv("SIGNING_KEY")
-            val envKeystorePassword = System.getenv("KEYSTORE_PASSWORD")
-            val envAlias = System.getenv("ALIAS")
-            val envKeyPassword = System.getenv("KEY_PASSWORD")
-
-            if (envKeystoreFile != null) {
-                storeFile = file(envKeystoreFile)
+            if (hasLocalSigningConfig) {
+                storeFile = rootProject.file(localKeystoreFile!!)
+                storePassword = localKeystorePassword
+                keyAlias = localKeyAlias
+                keyPassword = localKeyPassword
+            } else if (hasEnvSigningConfig) {
+                storeFile = file(envKeystoreFile!!)
                 storePassword = envKeystorePassword
                 keyAlias = envAlias
                 keyPassword = envKeyPassword
@@ -43,15 +84,13 @@ android {
 
     buildTypes {
         release {
-            // Only apply signing if environment variables are present
-            if (System.getenv("SIGNING_KEY") != null) {
+            if (hasLocalSigningConfig || hasEnvSigningConfig) {
                 signingConfig = signingConfigs.getByName("release")
             }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                getDefaultProguardFile("proguard-android-optimize.txt")
             )
             // Generate native debug symbols for crash analysis
             ndk {
@@ -62,51 +101,62 @@ android {
             isMinifyEnabled = false
         }
     }
-    
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
 
     buildFeatures {
+        buildConfig = true
         compose = true
         aidl = true
     }
-    
+
     packaging {
         resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1,INDEX.LIST,io.netty.versions.properties}"
+            excludes.add("/META-INF/{AL2.0,LGPL2.1}")
+        }
+        jniLibs {
+            useLegacyPackaging = true
         }
     }
 }
 
 dependencies {
-    // Core Android
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    compileOnly(project(":hidden-api"))
+
+    implementation(libs.androidx.core)
+    implementation(libs.androidx.lifecycle)
     implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.core.splashscreen)
+    implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.splashscreen)
     
     // Compose
     implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
-    implementation(libs.androidx.compose.material3)
+    implementation(libs.compose.ui)
+    implementation(libs.compose.ui.graphics)
+    implementation(libs.compose.ui.tooling.preview)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.materialIcons)
 
     // Miuix UI
-    implementation(libs.miuix)
+    implementation(libs.miuix.core)
+    implementation(libs.miuix.ui)
+    implementation(libs.miuix.shader)
+    implementation(libs.miuix.blur)
+    implementation(libs.miuix.preference)
     implementation(libs.miuix.icons)
+    implementation(libs.miuix.navigation)
     
-    // Hilt Dependency Injection
-    implementation(libs.hilt.android)
-    ksp(libs.hilt.compiler)
-    implementation(libs.hilt.navigation.compose)
+    // Koin Dependency Injection
+    implementation(platform(libs.koin.bom))
+    implementation(libs.koin.core)
+    implementation(libs.koin.android)
+    implementation(libs.koin.compose)
+    implementation(libs.koin.compose.viewmodel)
     
     // Navigation3
+    implementation(libs.androidx.lifecycle.viewmodel.navigation3)
     implementation(libs.androidx.navigation3.runtime)
-    implementation(libs.miuix.navigation3.ui)
+    implementation(libs.androidx.navigationevent) {
+        exclude(group = "androidx.navigation", module = "navigationevent-compose")
+    }
     
     // CameraX for Facecam
     implementation(libs.androidx.camera.core)
@@ -121,35 +171,34 @@ dependencies {
     // Accompanist for Permissions
     implementation(libs.accompanist.permissions)
     
-    // Security: Protobuf with buffer overflow fix
-    implementation("com.google.protobuf:protobuf-java:3.25.5")
-    implementation("com.google.protobuf:protobuf-java-util:3.25.5")
-    
     // Coil for Image/Video Thumbnails
     implementation(libs.coil.compose)
     implementation(libs.coil.video)
-    
-    // Security: Netty dependency constraints for CVE mitigation
-    implementation("io.netty:netty-codec-http:4.1.125.Final")
-    implementation("io.netty:netty-codec-http2:4.1.125.Final")
-    implementation("io.netty:netty-handler:4.1.118.Final")
-    implementation("io.netty:netty-common:4.1.118.Final")
-    
-    // Coroutines
-    implementation(libs.kotlinx.coroutines.android)
 
     // Shizuku
-    implementation(libs.shizuku.api)
-    implementation(libs.shizuku.provider)
-    
+    implementation(libs.rikka.shizuku.api)
+    implementation(libs.rikka.shizuku.provider)
+
+    implementation(project(":app-process"))
+
+    // Timber
+    implementation(libs.timber)
+
+    // HiddenApiBypass
+    implementation(libs.hiddenapibypass)
+
+    // Serialization
+    implementation(libs.ktx.serializationJson)
+
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation(libs.compose.ui.test.junit4)
     
     // Debug
-    debugImplementation(libs.androidx.compose.ui.tooling)
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
+    debugImplementation(libs.compose.ui.tooling)
+    debugImplementation(libs.compose.ui.test.manifest)
 }
+

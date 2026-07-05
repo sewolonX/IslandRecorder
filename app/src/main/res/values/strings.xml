@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Island Recorder</string>
+    <string name="app_name" translatable="false">Island Recorder</string>
 
     <!-- Quick Tile -->
     <string name="quick_tile_label">Screen Record</string>
@@ -7,7 +7,7 @@
     <string name="tile_stop_recording">Stop Recording</string>
 
     <!-- Home Screen -->
-    <string name="home_title">Island Recorder</string>
+    <string name="home_title" translatable="false">Island Recorder</string>
     <string name="status_ready">Ready to Record</string>
     <string name="status_recording">Recording</string>
     <string name="status_paused">Paused</string>
@@ -32,9 +32,29 @@
     <!-- Settings -->
     <string name="settings">Settings</string>
     <string name="section_status">Status</string>
+    <string name="section_interface">Interface</string>
+    <string name="personalization">Personalization</string>
+    <string name="theme_settings">Theme Settings</string>
+    <string name="theme_settings_desc">Configure theme mode and UI appearance</string>
+    <string name="theme_settings_miuix_ui">Miuix UI</string>
+    <string name="theme_settings_theme_mode">Theme Mode</string>
+    <string name="theme_settings_theme_mode_light">Light</string>
+    <string name="theme_settings_theme_mode_dark">Dark</string>
+    <string name="theme_settings_theme_mode_system">Follow System</string>
+    <string name="authorization_status">Authorization Status</string>
+    <string name="authorization_status_active">Privileged Access Active</string>
+    <string name="authorization_status_active_desc">Root or Shizuku operations are available</string>
+    <string name="authorization_status_inactive">Privileged Access Inactive</string>
+    <string name="authorization_status_inactive_desc">Tap to choose or authorize Root/Shizuku</string>
+    <string name="authorization_method">Authorization Method</string>
+    <string name="authorization_method_root">Root</string>
+    <string name="authorization_method_shizuku">Shizuku</string>
+    <string name="root_status">Root Status</string>
+    <string name="root_status_inactive">Inactive</string>
+    <string name="shizuku_status">Shizuku Status</string>
     <string name="section_recording">Screen Recording</string>
     <string name="grant_project_media">Grant Project Media Permission</string>
-    <string name="grant_project_media_summary">Automatically bypass the system recording permission dialog (Requires Root/Shizuku)</string>
+    <string name="grant_project_media_summary">Automatically bypass the system recording permission dialog</string>
     <string name="project_media_already_granted">Permission already granted</string>
     <string name="video_quality">Resolution</string>
     <string name="video_quality_summary">Video width and height in pixels. Higher means sharper</string>
@@ -49,8 +69,8 @@
     <string name="video_codec">Video Codec</string>
     <string name="video_codec_summary">H.265 supports HDR and is more efficient</string>
     <string name="show_touches">Show Screen Touches</string>
-    <string name="show_touches_summary">Show a white dot where fingers touch (Root Required)</string>
-    <string name="bypass_focus_island">Bypass Xiaomi Focus Island Whitelist (Unavailable)</string>
+    <string name="show_touches_summary">Show a white dot where fingers touch</string>
+    <string name="bypass_focus_island">Bypass Xiaomi Focus Island Whitelist</string>
     <string name="bypass_focus_island_summary">Temporarily disconnect XMSF network when sending notifications to bypass system whitelist (Requires Shizuku)\nStatus: %1$s</string>
     <string name="shizuku_status_authorized">Authorized</string>
     <string name="shizuku_status_not_authorized">Not Authorized</string>
@@ -109,7 +129,10 @@
 
     <!-- Permissions -->
     <string name="permission_required">Permission Required</string>
+    <string name="permission_privilege">Root or Shizuku required</string>
     <string name="permission_audio">Microphone permission is required to record audio</string>
+    <string name="permission_audio_required">Audio recording permission required</string>
+    <string name="permission_notifications_required">Notification permission required</string>
     <string name="permission_overlay">Overlay permission is required for floating controls</string>
     <string name="permission_storage">Storage permission is required to save recordings</string>
     <string name="grant_permission">Grant Permission</string>
@@ -151,7 +174,7 @@
     <!-- About -->
     <string name="section_about">About</string>
     <string name="project_url">Project URL</string>
-    <string name="project_url_value">https://github.com/Leaf-lsgtky/IslandRecoder</string>
+    <string name="project_url_value" translatable="false">https://github.com/wxxsfxyzm/IslandRecoder</string>
     <string name="original_project">Original Project</string>
-    <string name="original_project_value">https://github.com/Icradle-Innovations-Ltd/FluxRecorder</string>
+    <string name="original_project_value" translatable="false">https://github.com/Icradle-Innovations-Ltd/FluxRecorder</string>
 </resources>

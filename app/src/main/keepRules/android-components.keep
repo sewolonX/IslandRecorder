@@ -1,0 +1,2 @@
+# Keep Android IPC interfaces
+-keep public interface ** extends android.os.IInterface {*;}
