@@ -15,7 +15,6 @@ keystore/
 
 # IntelliJ / Android Studio
 .idea/*
-!.idea/.gitignore
 !.idea/codeStyles/
 !.idea/codeStyles/**
 !.idea/inspectionProfiles/
