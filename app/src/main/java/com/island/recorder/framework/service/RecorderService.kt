@@ -42,10 +42,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 import org.koin.android.ext.android.get
 import org.koin.android.ext.android.inject
 import org.koin.core.parameter.parametersOf
 import timber.log.Timber
+import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
@@ -79,6 +81,12 @@ class RecorderService : Service() {
     private var touchVisualizationEnabled = false
 
     private var lastHdrState = false
+    private var videoFpsWindowStartUs = -1L
+    private var lastVideoPresentationTimeUs = -1L
+    private var videoFramesInWindow = 0
+    private var videoMinDeltaUs = Long.MAX_VALUE
+    private var videoMaxDeltaUs = 0L
+    private var videoTotalFrames = 0L
     private val displayListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) {}
         override fun onDisplayRemoved(displayId: Int) {}
@@ -98,6 +106,8 @@ class RecorderService : Service() {
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_RESULT_DATA = "result_data"
         const val EXTRA_SETTINGS = "settings"
+        const val DIAGNOSTIC_FPS_TAG = "IR-Fps"
+        const val VIDEO_FPS_LOG_WINDOW_US = 2_000_000L
 
         private val _recordingState = MutableStateFlow<RecordingState>(RecordingState.Idle)
         val recordingState: StateFlow<RecordingState> = _recordingState.asStateFlow()
@@ -241,6 +251,11 @@ class RecorderService : Service() {
                 val maxRefreshRate = screenCaptureManager.getMaxRefreshRate()
                 val frameRate = settings.frameRate.fps.takeIf { it > 0 } ?: maxRefreshRate
                 val bitrate = settings.calculateBitrate(width, height, maxRefreshRate)
+                screenCaptureManager.logDisplayDiagnostics(
+                    targetFrameRate = frameRate,
+                    requestedWidth = width,
+                    requestedHeight = height
+                )
                 videoEncoder = get {
                     parametersOf(
                         width,
@@ -253,8 +268,8 @@ class RecorderService : Service() {
                     )
                 }
 
-                val surface = videoEncoder?.prepare()
-                if (surface == null) {
+                val encoderSurface = videoEncoder?.prepare()
+                if (encoderSurface == null) {
                     withContext(Dispatchers.Main) {
                         _recordingState.value =
                             RecordingState.Error(getString(R.string.error_encoder))
@@ -265,7 +280,7 @@ class RecorderService : Service() {
 
                 // Create virtual display
                 val virtualDisplay = screenCaptureManager.createVirtualDisplay(
-                    surface,
+                    encoderSurface,
                     width,
                     height,
                     screenCaptureManager.getScreenDensity()
@@ -335,6 +350,7 @@ class RecorderService : Service() {
 
                 // Start recording loop
                 startTime = System.currentTimeMillis()
+                resetVideoFpsDiagnostics()
                 _recordingState.value = RecordingState.Recording(0)
                 requestTileRefresh(this@RecorderService)
                 val bypass = settings.bypassFocusIsland
@@ -385,39 +401,46 @@ class RecorderService : Service() {
             }
 
             try {
-                // Get encoded video data
-                val output = videoEncoder?.getEncodedData() ?: VideoEncoder.EncoderOutput.TryAgain
+                var drainedOutput = false
+                var outputAvailable = true
+                while (outputAvailable && currentCoroutineContext().isActive) {
+                    val output = videoEncoder?.getEncodedData(timeoutUs = 0L)
+                        ?: VideoEncoder.EncoderOutput.TryAgain
 
-                when (output) {
-                    is VideoEncoder.EncoderOutput.FormatChanged -> {
-                        Timber.d("Encoder format changed")
-                        val format = videoEncoder?.getOutputFormat()
-                        if (format != null && !videoTrackAdded) {
-                            muxer?.addVideoTrack(format)
-                            videoTrackAdded = true
-                            Timber.d(
-                                "Video track added to muxer, HDR=${videoEncoder?.isHdrActive}"
-                            )
-                        } else if (format != null) {
-                            // Format changed during recording - HDR state may have changed
-                            Timber.d(
-                                "Format changed during recording, HDR=${videoEncoder?.isHdrActive}"
-                            )
-                        }
-                    }
-
-                    is VideoEncoder.EncoderOutput.Data -> {
-                        val (buffer, bufferInfo, bufferIndex) = output
-
-                        if (videoTrackAdded && (bufferInfo.flags and android.media.MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
-                            muxer?.writeVideoSample(buffer, bufferInfo)
+                    when (output) {
+                        is VideoEncoder.EncoderOutput.FormatChanged -> {
+                            drainedOutput = true
+                            Timber.d("Encoder format changed")
+                            val format = videoEncoder?.getOutputFormat()
+                            if (format != null && !videoTrackAdded) {
+                                muxer?.addVideoTrack(format)
+                                videoTrackAdded = true
+                                Timber.d(
+                                    "Video track added to muxer, HDR=${videoEncoder?.isHdrActive}"
+                                )
+                            } else if (format != null) {
+                                // Format changed during recording - HDR state may have changed
+                                Timber.d(
+                                    "Format changed during recording, HDR=${videoEncoder?.isHdrActive}"
+                                )
+                            }
                         }
 
-                        videoEncoder?.releaseOutputBuffer(bufferIndex)
-                    }
+                        is VideoEncoder.EncoderOutput.Data -> {
+                            drainedOutput = true
+                            val (buffer, bufferInfo, bufferIndex) = output
 
-                    is VideoEncoder.EncoderOutput.TryAgain -> {
-                        // No data available yet, just continue
+                            if (videoTrackAdded && (bufferInfo.flags and android.media.MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
+                                recordVideoFpsSample(bufferInfo)
+                                muxer?.writeVideoSample(buffer, bufferInfo)
+                            }
+
+                            videoEncoder?.releaseOutputBuffer(bufferIndex)
+                        }
+
+                        is VideoEncoder.EncoderOutput.TryAgain -> {
+                            outputAvailable = false
+                        }
                     }
                 }
 
@@ -425,7 +448,11 @@ class RecorderService : Service() {
                 val currentDuration = System.currentTimeMillis() - startTime - pausedDuration
                 _recordingState.value = RecordingState.Recording(currentDuration)
 
-                delay(10.milliseconds) // Small delay to prevent busy waiting
+                if (drainedOutput) {
+                    yield()
+                } else {
+                    delay(1.milliseconds)
+                }
 
             } catch (e: CancellationException) {
                 throw e
@@ -434,6 +461,72 @@ class RecorderService : Service() {
                 break
             }
         }
+    }
+
+    private fun resetVideoFpsDiagnostics() {
+        videoFpsWindowStartUs = -1L
+        lastVideoPresentationTimeUs = -1L
+        videoFramesInWindow = 0
+        videoMinDeltaUs = Long.MAX_VALUE
+        videoMaxDeltaUs = 0L
+        videoTotalFrames = 0L
+    }
+
+    private fun recordVideoFpsSample(bufferInfo: android.media.MediaCodec.BufferInfo) {
+        val presentationTimeUs = bufferInfo.presentationTimeUs
+        if (presentationTimeUs < 0) return
+
+        if (videoFpsWindowStartUs < 0) {
+            videoFpsWindowStartUs = presentationTimeUs
+            lastVideoPresentationTimeUs = presentationTimeUs
+            videoFramesInWindow = 1
+            videoTotalFrames = 1
+            Timber.tag(DIAGNOSTIC_FPS_TAG).d("videoOutput firstPtsUs=$presentationTimeUs")
+            return
+        }
+
+        val deltaUs = presentationTimeUs - lastVideoPresentationTimeUs
+        if (deltaUs > 0) {
+            videoMinDeltaUs = minOf(videoMinDeltaUs, deltaUs)
+            videoMaxDeltaUs = maxOf(videoMaxDeltaUs, deltaUs)
+        } else {
+            Timber.tag(DIAGNOSTIC_FPS_TAG).w(
+                "Non-increasing video PTS: last=$lastVideoPresentationTimeUs current=$presentationTimeUs"
+            )
+        }
+
+        lastVideoPresentationTimeUs = presentationTimeUs
+        videoFramesInWindow += 1
+        videoTotalFrames += 1
+
+        val windowDurationUs = presentationTimeUs - videoFpsWindowStartUs
+        if (windowDurationUs < VIDEO_FPS_LOG_WINDOW_US || videoFramesInWindow < 2) return
+
+        val frameIntervals = videoFramesInWindow - 1
+        val fps = frameIntervals * 1_000_000.0 / windowDurationUs
+        val avgDeltaUs = windowDurationUs.toDouble() / frameIntervals
+        val minDelta = if (videoMinDeltaUs == Long.MAX_VALUE) 0L else videoMinDeltaUs
+
+        Timber.tag(DIAGNOSTIC_FPS_TAG).d(
+            String.format(
+                Locale.US,
+                "videoOutput windowFps=%.2f frames=%d total=%d windowUs=%d " +
+                    "avgDeltaUs=%.1f minDeltaUs=%d maxDeltaUs=%d lastPtsUs=%d",
+                fps,
+                videoFramesInWindow,
+                videoTotalFrames,
+                windowDurationUs,
+                avgDeltaUs,
+                minDelta,
+                videoMaxDeltaUs,
+                presentationTimeUs
+            )
+        )
+
+        videoFpsWindowStartUs = presentationTimeUs
+        videoFramesInWindow = 1
+        videoMinDeltaUs = Long.MAX_VALUE
+        videoMaxDeltaUs = 0L
     }
 
     private suspend fun audioLoop() {

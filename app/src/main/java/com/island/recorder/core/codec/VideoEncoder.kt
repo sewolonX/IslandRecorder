@@ -2,11 +2,13 @@ package com.island.recorder.core.codec
 
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
+import android.media.MediaCodecList
 import android.media.MediaFormat
 import android.os.Bundle
-import timber.log.Timber
 import android.view.Surface
+import timber.log.Timber
 import java.nio.ByteBuffer
+import java.util.Locale
 
 /**
  * Hardware-accelerated video encoder using MediaCodec
@@ -41,6 +43,7 @@ class VideoEncoder(
         const val COLOR_TRANSFER_PQ = 6
         const val COLOR_RANGE_LIMITED = 2
         const val COLOR_RANGE_FULL = 1
+        const val DIAGNOSTIC_CODEC_TAG = "IR-Codec"
     }
 
     /**
@@ -60,6 +63,8 @@ class VideoEncoder(
 
     fun prepare(): Surface? {
         try {
+            logEncoderCapabilityDiagnostics()
+
             val format = MediaFormat.createVideoFormat(mimeType, width, height).apply {
                 setInteger(
                     MediaFormat.KEY_COLOR_FORMAT,
@@ -69,10 +74,6 @@ class VideoEncoder(
                 setInteger(MediaFormat.KEY_FRAME_RATE, frameRate)
                 if (maxFpsToEncoder != null && maxFpsToEncoder > 0) {
                     setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, maxFpsToEncoder.toFloat())
-                    setLong(
-                        MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER,
-                        1000000L / maxFpsToEncoder
-                    )
                 }
                 setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, I_FRAME_INTERVAL)
                 setInteger(
@@ -105,12 +106,14 @@ class VideoEncoder(
             }
 
             mediaCodec = MediaCodec.createEncoderByType(mimeType).apply {
+                Timber.tag(DIAGNOSTIC_CODEC_TAG).d("selectedEncoder=$name")
                 configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
                 inputSurface = createInputSurface()
                 start()
             }
 
-            Timber.d("Video encoder initialized: ${width}x${height} @ ${frameRate}fps, ${bitrate}bps, codec=$mimeType"
+            Timber.d(
+                "Video encoder initialized: ${width}x${height} @ ${frameRate}fps, ${bitrate}bps, codec=$mimeType"
             )
             return inputSurface
 
@@ -118,6 +121,63 @@ class VideoEncoder(
             Timber.e(e, "Failed to initialize video encoder")
             release()
             return null
+        }
+    }
+
+    private fun logEncoderCapabilityDiagnostics() {
+        Timber.tag(DIAGNOSTIC_CODEC_TAG).d(
+            "requested=${width}x${height} target=${frameRate}fps maxFpsToEncoder=$maxFpsToEncoder " +
+                    "mime=$mimeType bitrate=$bitrate hdr=$isHdrEnabled"
+        )
+
+        val requestedPerformancePoint =
+            MediaCodecInfo.VideoCapabilities.PerformancePoint(width, height, frameRate)
+        val codecInfos = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
+            .filter { it.isEncoder && it.supportedTypes.any { type -> type == mimeType } }
+
+        codecInfos.forEach { info ->
+            try {
+                val capabilities = info.getCapabilitiesForType(mimeType)
+                val videoCapabilities = capabilities.videoCapabilities
+                if (videoCapabilities == null) {
+                    Timber.tag(DIAGNOSTIC_CODEC_TAG).d(
+                        "candidate=${info.name} has no video capabilities for $mimeType"
+                    )
+                    return@forEach
+                }
+                val supportsRequestedRate =
+                    videoCapabilities.areSizeAndRateSupported(width, height, frameRate.toDouble())
+                val ratesForSize = runCatching {
+                    videoCapabilities.getSupportedFrameRatesFor(width, height)
+                }.getOrNull()
+                val performancePoints = videoCapabilities.supportedPerformancePoints
+                val coversRequestedPerformance = performancePoints?.any {
+                    it.covers(requestedPerformancePoint)
+                }
+                val maxSupportedRate = ratesForSize?.upper
+                val colorFormats = capabilities.colorFormats.joinToString(
+                    prefix = "[",
+                    postfix = "]"
+                )
+
+                Timber.tag(DIAGNOSTIC_CODEC_TAG).d(
+                    "candidate=${info.name} hardware=${info.isHardwareAccelerated} " +
+                            "vendor=${info.isVendor} supportsSizeRate=$supportsRequestedRate " +
+                            "ratesForSize=${
+                                ratesForSize?.let {
+                                    String.format(
+                                        Locale.US,
+                                        "%s",
+                                        it
+                                    )
+                                }
+                            } " +
+                            "maxRateForSize=$maxSupportedRate " +
+                            "performanceCovers=$coversRequestedPerformance colorFormats=$colorFormats"
+                )
+            } catch (e: Exception) {
+                Timber.tag(DIAGNOSTIC_CODEC_TAG).w(e, "Failed to inspect encoder ${info.name}")
+            }
         }
     }
 
@@ -154,7 +214,8 @@ class VideoEncoder(
             mediaCodec?.setParameters(params)
 
             isHdrActive = newIsHdr
-            Timber.d("Color space updated: HDR=$isHdrActive (standard=${hdrConfig.standard}, transfer=${hdrConfig.transfer})"
+            Timber.d(
+                "Color space updated: HDR=$isHdrActive (standard=${hdrConfig.standard}, transfer=${hdrConfig.transfer})"
             )
         } catch (e: Exception) {
             Timber.e(e, "Failed to update color space")
@@ -183,11 +244,11 @@ class VideoEncoder(
         object TryAgain : EncoderOutput
     }
 
-    fun getEncodedData(): EncoderOutput {
+    fun getEncodedData(timeoutUs: Long = TIMEOUT_US): EncoderOutput {
         val codec = mediaCodec ?: return EncoderOutput.TryAgain
 
         val bufferInfo = MediaCodec.BufferInfo()
-        val outputBufferIndex = codec.dequeueOutputBuffer(bufferInfo, TIMEOUT_US)
+        val outputBufferIndex = codec.dequeueOutputBuffer(bufferInfo, timeoutUs)
 
         return when {
             outputBufferIndex >= 0 -> {

@@ -7,6 +7,7 @@ import timber.log.Timber
 import java.io.FileDescriptor
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.Locale
 
 /**
  * Combines video and audio tracks into MP4 container with HDR metadata support
@@ -28,6 +29,8 @@ class MediaMuxerWrapper(
         // HDR transfer functions (matching MediaFormat constants)
         const val COLOR_TRANSFER_HLG = 7
         const val COLOR_TRANSFER_PQ = 6
+        const val DIAGNOSTIC_MUXER_TAG = "IR-Muxer"
+        const val VIDEO_SAMPLE_LOG_WINDOW_US = 2_000_000L
     }
 
     /**
@@ -164,6 +167,16 @@ class MediaMuxerWrapper(
     private var expectAudio = false
     private var timestampOffsetUs = 0L
     private var pauseStartUs = 0L
+    private var videoSampleWindowStartUs = -1L
+    private var lastVideoSamplePtsUs = -1L
+    private var videoSamplesInWindow = 0
+    private var videoMinDeltaUs = Long.MAX_VALUE
+    private var videoMaxDeltaUs = 0L
+    private var totalVideoSamplesWritten = 0L
+    private var totalVideoBytesWritten = 0L
+    private var totalVideoKeyFrames = 0L
+    private var totalVideoCodecConfigSamples = 0L
+    private var totalVideoWriteFailures = 0L
 
     /**
      * Mark the start of a pause — samples between pause and resume will be dropped
@@ -197,7 +210,11 @@ class MediaMuxerWrapper(
             // Start muxer when video track is ready (audio is optional)
             mediaMuxer?.start()
             isMuxerStarted = true
-            Timber.d("MediaMuxer started")
+            resetVideoSampleDiagnostics()
+            Timber.tag(DIAGNOSTIC_MUXER_TAG).d(
+                "started videoTrack=$videoTrackIndex audioTrack=$audioTrackIndex " +
+                    "expectAudio=$expectAudio displayName=$displayName"
+            )
         }
     }
 
@@ -222,9 +239,99 @@ class MediaMuxerWrapper(
                 bufferInfo.presentationTimeUs - timestampOffsetUs, bufferInfo.flags
             )
             mediaMuxer?.writeSampleData(videoTrackIndex, buffer, adjusted)
+            recordVideoSampleWrite(adjusted)
         } catch (e: Exception) {
+            totalVideoWriteFailures += 1
+            Timber.tag(DIAGNOSTIC_MUXER_TAG).e(
+                e,
+                "videoWriteFailed size=${bufferInfo.size} ptsUs=${bufferInfo.presentationTimeUs} " +
+                    "offsetUs=$timestampOffsetUs flags=${bufferInfo.flags} failures=$totalVideoWriteFailures"
+            )
             Timber.e(e, "Error writing video sample")
         }
+    }
+
+    private fun resetVideoSampleDiagnostics() {
+        videoSampleWindowStartUs = -1L
+        lastVideoSamplePtsUs = -1L
+        videoSamplesInWindow = 0
+        videoMinDeltaUs = Long.MAX_VALUE
+        videoMaxDeltaUs = 0L
+        totalVideoSamplesWritten = 0L
+        totalVideoBytesWritten = 0L
+        totalVideoKeyFrames = 0L
+        totalVideoCodecConfigSamples = 0L
+        totalVideoWriteFailures = 0L
+    }
+
+    private fun recordVideoSampleWrite(bufferInfo: MediaCodec.BufferInfo) {
+        val ptsUs = bufferInfo.presentationTimeUs
+        totalVideoSamplesWritten += 1
+        totalVideoBytesWritten += bufferInfo.size.toLong()
+
+        if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME) != 0) {
+            totalVideoKeyFrames += 1
+        }
+        if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
+            totalVideoCodecConfigSamples += 1
+        }
+
+        if (videoSampleWindowStartUs < 0) {
+            videoSampleWindowStartUs = ptsUs
+            lastVideoSamplePtsUs = ptsUs
+            videoSamplesInWindow = 1
+            Timber.tag(DIAGNOSTIC_MUXER_TAG).d(
+                "videoWrite firstPtsUs=$ptsUs size=${bufferInfo.size} flags=${bufferInfo.flags}"
+            )
+            return
+        }
+
+        val deltaUs = ptsUs - lastVideoSamplePtsUs
+        if (deltaUs > 0) {
+            videoMinDeltaUs = minOf(videoMinDeltaUs, deltaUs)
+            videoMaxDeltaUs = maxOf(videoMaxDeltaUs, deltaUs)
+        } else {
+            Timber.tag(DIAGNOSTIC_MUXER_TAG).w(
+                "Non-increasing muxer video PTS: last=$lastVideoSamplePtsUs current=$ptsUs"
+            )
+        }
+
+        lastVideoSamplePtsUs = ptsUs
+        videoSamplesInWindow += 1
+
+        val windowDurationUs = ptsUs - videoSampleWindowStartUs
+        if (windowDurationUs < VIDEO_SAMPLE_LOG_WINDOW_US || videoSamplesInWindow < 2) return
+
+        val sampleIntervals = videoSamplesInWindow - 1
+        val fps = sampleIntervals * 1_000_000.0 / windowDurationUs
+        val avgDeltaUs = windowDurationUs.toDouble() / sampleIntervals
+        val minDelta = if (videoMinDeltaUs == Long.MAX_VALUE) 0L else videoMinDeltaUs
+
+        Timber.tag(DIAGNOSTIC_MUXER_TAG).d(
+            String.format(
+                Locale.US,
+                "videoWrite windowFps=%.2f samples=%d total=%d windowUs=%d " +
+                    "avgDeltaUs=%.1f minDeltaUs=%d maxDeltaUs=%d lastPtsUs=%d " +
+                    "bytes=%d keyFrames=%d codecConfig=%d failures=%d",
+                fps,
+                videoSamplesInWindow,
+                totalVideoSamplesWritten,
+                windowDurationUs,
+                avgDeltaUs,
+                minDelta,
+                videoMaxDeltaUs,
+                ptsUs,
+                totalVideoBytesWritten,
+                totalVideoKeyFrames,
+                totalVideoCodecConfigSamples,
+                totalVideoWriteFailures
+            )
+        )
+
+        videoSampleWindowStartUs = ptsUs
+        videoSamplesInWindow = 1
+        videoMinDeltaUs = Long.MAX_VALUE
+        videoMaxDeltaUs = 0L
     }
 
     /**
@@ -266,6 +373,11 @@ class MediaMuxerWrapper(
             mediaMuxer?.release()
             mediaMuxer = null
 
+            Timber.tag(DIAGNOSTIC_MUXER_TAG).d(
+                "released videoSamples=$totalVideoSamplesWritten videoBytes=$totalVideoBytesWritten " +
+                    "keyFrames=$totalVideoKeyFrames codecConfig=$totalVideoCodecConfigSamples " +
+                    "failures=$totalVideoWriteFailures lastPtsUs=$lastVideoSamplePtsUs"
+            )
             Timber.d("MediaMuxer released")
         } catch (e: Exception) {
             Timber.e(e, "Error releasing MediaMuxer")

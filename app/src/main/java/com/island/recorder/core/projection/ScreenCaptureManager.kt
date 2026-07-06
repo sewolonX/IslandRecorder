@@ -9,6 +9,7 @@ import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.view.Surface
 import android.view.WindowManager
+import timber.log.Timber
 import kotlin.math.roundToInt
 
 /**
@@ -110,6 +111,26 @@ class ScreenCaptureManager(private val context: Context) {
             ?: DEFAULT_REFRESH_RATE
     }
 
+    fun logDisplayDiagnostics(targetFrameRate: Int, requestedWidth: Int, requestedHeight: Int) {
+        val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+        val display = displayManager.getDisplay(android.view.Display.DEFAULT_DISPLAY)
+        if (display == null) {
+            Timber.tag(DIAGNOSTIC_DISPLAY_TAG).w("Default display unavailable")
+            return
+        }
+
+        val mode = display.mode
+        val supportedModes = display.supportedModes.joinToString(separator = "; ") {
+            "id=${it.modeId} ${it.physicalWidth}x${it.physicalHeight}@${it.refreshRate}Hz"
+        }
+
+        Timber.tag(DIAGNOSTIC_DISPLAY_TAG).d(
+            "requested=${requestedWidth}x${requestedHeight} target=${targetFrameRate}fps " +
+                "activeMode=id=${mode.modeId} ${mode.physicalWidth}x${mode.physicalHeight}@${mode.refreshRate}Hz " +
+                "refreshRate=${display.refreshRate}Hz supported=[$supportedModes]"
+        )
+    }
+
     /**
      * Pause screen capture by disconnecting the surface
      */
@@ -152,5 +173,6 @@ class ScreenCaptureManager(private val context: Context) {
 
     private companion object {
         const val DEFAULT_REFRESH_RATE = 60
+        const val DIAGNOSTIC_DISPLAY_TAG = "IR-Display"
     }
 }
