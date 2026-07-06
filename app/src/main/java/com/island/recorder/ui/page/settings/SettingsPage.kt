@@ -375,6 +375,19 @@ fun SettingsPage(
                             }
                         }
                     )
+                    SwitchPreference(
+                        title = stringResource(R.string.stop_on_lock_screen),
+                        summary = stringResource(R.string.stop_on_lock_screen_summary),
+                        checked = currentSettings.stopOnLockScreen,
+                        onCheckedChange = {
+                            scope.launch {
+                                appSettingsRepo.putBoolean(
+                                    BooleanSetting.StopOnLockScreen,
+                                    it
+                                )
+                            }
+                        }
+                    )
                     val shizukuStatusString = when (capability.shizukuMode) {
                         ShizukuMode.NotRunning -> stringResource(R.string.shizuku_status_not_running)
                         ShizukuMode.NotAuthorized -> stringResource(R.string.shizuku_status_not_authorized)

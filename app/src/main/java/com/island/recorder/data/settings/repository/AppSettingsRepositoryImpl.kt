@@ -44,6 +44,7 @@ class AppSettingsRepositoryImpl(
                     audioSource = safeValueOf(prefs[AppDataStore.AUDIO_SOURCE], AudioSource.BOTH),
                     videoCodec = safeValueOf(prefs[AppDataStore.VIDEO_CODEC], VideoCodec.H264),
                     showTouches = prefs[AppDataStore.SHOW_TOUCHES] ?: false,
+                    stopOnLockScreen = prefs[AppDataStore.STOP_ON_LOCK_SCREEN] ?: false,
                     bypassFocusIsland = prefs[AppDataStore.BYPASS_FOCUS_ISLAND] ?: false,
                     tileStyle = safeValueOf(prefs[AppDataStore.TILE_STYLE], TileStyle.DEFAULT)
                 ),
@@ -99,6 +100,7 @@ class AppSettingsRepositoryImpl(
     private fun booleanKey(setting: BooleanSetting): Preferences.Key<Boolean> =
         when (setting) {
             BooleanSetting.ShowTouches -> AppDataStore.SHOW_TOUCHES
+            BooleanSetting.StopOnLockScreen -> AppDataStore.STOP_ON_LOCK_SCREEN
             BooleanSetting.BypassFocusIsland -> AppDataStore.BYPASS_FOCUS_ISLAND
             BooleanSetting.FirstLaunch -> AppDataStore.FIRST_LAUNCH
         }

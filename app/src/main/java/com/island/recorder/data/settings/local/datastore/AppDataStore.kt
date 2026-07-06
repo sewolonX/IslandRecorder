@@ -18,6 +18,8 @@ class AppDataStore(
         val AUDIO_SOURCE: Preferences.Key<String> = stringPreferencesKey("audio_source")
         val VIDEO_CODEC: Preferences.Key<String> = stringPreferencesKey("video_codec")
         val SHOW_TOUCHES: Preferences.Key<Boolean> = booleanPreferencesKey("show_touches")
+        val STOP_ON_LOCK_SCREEN: Preferences.Key<Boolean> =
+            booleanPreferencesKey("stop_on_lock_screen")
         val BYPASS_FOCUS_ISLAND: Preferences.Key<Boolean> = booleanPreferencesKey("bypass_focus_island")
         val TILE_STYLE: Preferences.Key<String> = stringPreferencesKey("tile_style")
         val STORAGE_TREE_URI: Preferences.Key<String> = stringPreferencesKey("storage_tree_uri")

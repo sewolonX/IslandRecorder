@@ -106,10 +106,10 @@
 
     </application>
 
-    <overlay
-        android:isStatic="true"
-        android:requiredSystemPropertyName="ro.miui.build.region"
-        android:requiredSystemPropertyValue="cn"
-        android:targetPackage="com.island.recorder" />
+    <!--    <overlay
+            android:isStatic="true"
+            android:requiredSystemPropertyName="ro.miui.build.region"
+            android:requiredSystemPropertyValue="cn"
+            android:targetPackage="com.island.recorder" />-->
 
 </manifest>

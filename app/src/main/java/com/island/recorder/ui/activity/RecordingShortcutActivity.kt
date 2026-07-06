@@ -238,6 +238,17 @@ class RecordingShortcutActivity : ComponentActivity() {
                                         }
                                     }
                                 )
+                                StopOnLockScreenSwitch(
+                                    settings = settings,
+                                    onCheckedChange = {
+                                        scope.launch {
+                                            appSettingsRepo.putBoolean(
+                                                BooleanSetting.StopOnLockScreen,
+                                                it
+                                            )
+                                        }
+                                    }
+                                )
                             }
 
                             // Divider
@@ -315,6 +326,17 @@ class RecordingShortcutActivity : ComponentActivity() {
                                     }
                                 }
                             )
+                            StopOnLockScreenSwitch(
+                                settings = settings,
+                                onCheckedChange = {
+                                    scope.launch {
+                                        appSettingsRepo.putBoolean(
+                                            BooleanSetting.StopOnLockScreen,
+                                            it
+                                        )
+                                    }
+                                }
+                            )
                             Spacer(modifier = Modifier.height(16.dp))
                             Row(modifier = Modifier.fillMaxWidth()) {
                                 TextButton(
@@ -346,6 +368,20 @@ class RecordingShortcutActivity : ComponentActivity() {
 
     private fun AudioSource.usesMicrophone(): Boolean =
         this == AudioSource.MICROPHONE || this == AudioSource.BOTH
+}
+
+@Composable
+private fun StopOnLockScreenSwitch(
+    settings: RecordingSettings,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    SwitchPreference(
+        title = stringResource(R.string.stop_on_lock_screen),
+        summary = stringResource(R.string.stop_on_lock_screen_summary),
+        checked = settings.stopOnLockScreen,
+        insideMargin = PaddingValues(0.dp),
+        onCheckedChange = onCheckedChange
+    )
 }
 
 @Composable

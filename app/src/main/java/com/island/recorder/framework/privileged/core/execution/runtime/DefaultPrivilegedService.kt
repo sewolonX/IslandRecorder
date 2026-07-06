@@ -3,6 +3,7 @@ package com.island.recorder.framework.privileged.core.execution.runtime
 import android.annotation.SuppressLint
 import android.content.AttributionSource
 import android.content.Context
+import android.content.Intent
 import android.net.IConnectivityManager
 import android.os.Bundle
 import android.os.IBinder
@@ -29,6 +30,16 @@ class DefaultPrivilegedService private constructor(
         private const val OP_PROJECT_MEDIA = 46
         private const val OPSTR_PROJECT_MEDIA = "android:project_media"
         private const val SETTING_SHOW_TOUCHES = "show_touches"
+        private const val SETTING_SCREEN_SHARE_PROTECTION = "screen_share_protection"
+        private const val ACTION_OPEN_SCREEN_SHARE_PROTECTION =
+            "com.miui.action.open_screen_share_protection"
+        private const val EXTRA_OPEN_SCREEN_SHARE_PROTECTION = "open_screen_share_protection"
+        private const val PERMISSION_READ_AND_WRITE_PERMISSION_MANAGER =
+            "miui.permission.READ_AND_WIRTE_PERMISSION_MANAGER"
+        private const val SETTING_ENABLED = "1"
+        private const val SETTING_DISABLED = "0"
+        private const val CALL_METHOD_GET_SECURE = "GET_secure"
+        private const val CALL_METHOD_PUT_SECURE = "PUT_secure"
         private const val CALL_METHOD_PUT_SYSTEM = "PUT_system"
         private const val CALL_METHOD_USER_KEY = "_user"
         private const val CALL_METHOD_OVERRIDEABLE_BY_RESTORE_KEY = "_overrideable_by_restore"
@@ -75,7 +86,7 @@ class DefaultPrivilegedService private constructor(
 
     override fun setShowTouches(enabled: Boolean): Boolean {
         return try {
-            val targetValue = if (enabled) "1" else "0"
+            val targetValue = if (enabled) SETTING_ENABLED else SETTING_DISABLED
             putSystemSettingWithHookedProvider(SETTING_SHOW_TOUCHES, targetValue)
             Timber.tag(TAG).i("Set show_touches to $targetValue via ${runtime.name}.")
             true
@@ -85,9 +96,71 @@ class DefaultPrivilegedService private constructor(
         }
     }
 
+    override fun isScreenShareProtectionEnabled(): Boolean {
+        return try {
+            val protectionOn =
+                getSecureSettingWithHookedProvider(SETTING_SCREEN_SHARE_PROTECTION)
+            protectionOn == SETTING_ENABLED
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Failed to read screen share protection via ${runtime.name}")
+            false
+        }
+    }
+
+    override fun setScreenShareProtectionEnabled(enabled: Boolean): Boolean {
+        return try {
+            val targetValue = if (enabled) SETTING_ENABLED else SETTING_DISABLED
+            putSecureSettingWithHookedProvider(
+                SETTING_SCREEN_SHARE_PROTECTION,
+                targetValue
+            )
+            broadcastScreenShareProtectionChanged(enabled)
+            Timber.tag(TAG).i(
+                "Set screen share protection to $targetValue via ${runtime.name}."
+            )
+            true
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Failed to set screen share protection via ${runtime.name}")
+            false
+        }
+    }
+
+    private fun broadcastScreenShareProtectionChanged(enabled: Boolean) {
+        val intent = Intent(ACTION_OPEN_SCREEN_SHARE_PROTECTION).apply {
+            putExtra(EXTRA_OPEN_SCREEN_SHARE_PROTECTION, enabled)
+        }
+        context.sendBroadcast(intent, PERMISSION_READ_AND_WRITE_PERMISSION_MANAGER)
+    }
+
     private fun putSystemSettingWithHookedProvider(name: String, value: String) {
-        val targetBinder = runtime.settingsBinder(reflect, Settings.System::class.java)
-            ?: throw IllegalStateException("Privileged Settings.System binder is unavailable")
+        putSettingWithHookedProvider(
+            settingsClass = Settings.System::class.java,
+            authority = requireNotNull(Settings.System.CONTENT_URI.authority),
+            callMethod = CALL_METHOD_PUT_SYSTEM,
+            name = name,
+            value = value
+        )
+    }
+
+    private fun putSecureSettingWithHookedProvider(name: String, value: String) {
+        putSettingWithHookedProvider(
+            settingsClass = Settings.Secure::class.java,
+            authority = requireNotNull(Settings.Secure.CONTENT_URI.authority),
+            callMethod = CALL_METHOD_PUT_SECURE,
+            name = name,
+            value = value
+        )
+    }
+
+    private fun putSettingWithHookedProvider(
+        settingsClass: Class<*>,
+        authority: String,
+        callMethod: String,
+        name: String,
+        value: String
+    ) {
+        val targetBinder = runtime.settingsBinder(reflect, settingsClass)
+            ?: throw IllegalStateException("Privileged Settings binder is unavailable")
         val provider = hookedContentProvider(targetBinder)
         val extras = Bundle().apply {
             putString(Settings.NameValueTable.VALUE, value)
@@ -107,11 +180,40 @@ class DefaultPrivilegedService private constructor(
                 Bundle::class.java
             ),
             runtime.settingsResolverContext(context).attributionSource,
-            Settings.System.CONTENT_URI.authority,
-            CALL_METHOD_PUT_SYSTEM,
+            authority,
+            callMethod,
             name,
             extras
         )
+    }
+
+    private fun getSecureSettingWithHookedProvider(name: String): String? {
+        val targetBinder = runtime.settingsBinder(reflect, Settings.Secure::class.java)
+            ?: throw IllegalStateException("Privileged Settings.Secure binder is unavailable")
+        val provider = hookedContentProvider(targetBinder)
+        val extras = Bundle().apply {
+            putInt(CALL_METHOD_USER_KEY, android.os.Process.myUid() / 100000)
+        }
+
+        val result = reflect.invoke<Bundle>(
+            obj = provider,
+            name = "call",
+            clazz = provider.javaClass,
+            parameterTypes = arrayOf(
+                AttributionSource::class.java,
+                String::class.java,
+                String::class.java,
+                String::class.java,
+                Bundle::class.java
+            ),
+            runtime.settingsResolverContext(context).attributionSource,
+            requireNotNull(Settings.Secure.CONTENT_URI.authority),
+            CALL_METHOD_GET_SECURE,
+            name,
+            extras
+        )
+
+        return result?.getString(Settings.NameValueTable.VALUE)
     }
 
     private fun hookedContentProvider(binder: IBinder): Any {

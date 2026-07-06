@@ -50,6 +50,12 @@ class PrivilegedOperationProvider(
     fun setShowTouches(enabled: Boolean): Boolean =
         callPrivileged { it.setShowTouches(enabled) }
 
+    fun isScreenShareProtectionEnabled(): Boolean =
+        callPrivileged { it.isScreenShareProtectionEnabled() }
+
+    fun setScreenShareProtectionEnabled(enabled: Boolean): Boolean =
+        callPrivileged { it.setScreenShareProtectionEnabled(enabled) }
+
     fun setProjectMediaAllowed(
         packageName: String = context.packageName,
         uid: Int = context.applicationInfo.uid,

@@ -112,6 +112,7 @@ data class RecordingSettings(
     val audioSource: AudioSource = AudioSource.BOTH,
     val videoCodec: VideoCodec = VideoCodec.H264,
     val showTouches: Boolean = false,
+    val stopOnLockScreen: Boolean = false,
     val bypassFocusIsland: Boolean = false,
     val tileStyle: TileStyle = TileStyle.DEFAULT
 ) : Parcelable {
