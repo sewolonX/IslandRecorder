@@ -1,243 +1,172 @@
 # Island Recorder
 
-<div align="center">
-
-### 专业的 Android 屏幕录制应用
-
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/Leaf-lsgtky/IslandRecoder/releases)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License: GPL v3 or later](https://img.shields.io/badge/License-GPLv3%2B-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Latest Release](https://img.shields.io/github/v/release/wxxsfxyzm/IslandRecoder?label=Release)](https://github.com/wxxsfxyzm/IslandRecoder/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-Android-brightgreen.svg)](https://www.android.com)
-[![Min SDK](https://img.shields.io/badge/minSdk-24-orange.svg)](https://developer.android.com/about/versions/nougat)
+[![Min SDK](https://img.shields.io/badge/minSdk-35-orange.svg)](https://developer.android.com/about/versions/15)
 
-</div>
+> A Xiaomi-focused screen recorder built as a replacement for the stock Xiaomi screen recorder, with
+> device-specific settings integration and Super Island recording controls.
 
----
+Island Recorder is a personal fork built because the stock Xiaomi screen recorder did not fit my
+workflow. It is intended as a replacement recorder for supported Xiaomi devices, with local-only
+recording, flexible video/audio settings, Xiaomi-specific system setting adaptation, and recording
+controls exposed through Xiaomi Super Island.
 
-## 📱 关于
+This project is not intended for non-Xiaomi devices or Xiaomi devices that do not support Super
+Island. Core Android recording paths may still compile or run elsewhere, but the product design,
+privileged integrations, and control surface are optimized for Xiaomi/HyperOS behavior.
 
-**Island Recorder** 是一款功能强大的 Android 屏幕录制应用，基于 [Flux Recorder](https://github.com/Icradle-Innovations-Ltd/FluxRecorder) 二次开发。在保留原有优秀功能的基础上，添加了动态 HDR 录制支持、MIUI/HyperOS 优化等特性。
+This project is developed based on the following projects:
 
----
+- [Leaf-lsgtky/IslandRecoder](https://github.com/Leaf-lsgtky/IslandRecoder)
+- [IcradleInnovationsLtd/FluxRecorder](https://github.com/IcradleInnovationsLtd/FluxRecorder)
 
-## ✨ 主要特性
+## Highlights
 
-### 录制功能
-- **多分辨率选项** - 1080p, 720p, 480p, 360p 及原生分辨率
-- **可变帧率** - 15/24/30/48/60/90/120 FPS 可选
-- **动态 HDR 支持** - H.265 编码时自动检测并切换 HDR 内容（Android 10+）
-- **多种编码格式** - H.264 (AVC) / H.265 (HEVC)
-- **灵活音频录制** - 系统内录 / 麦克风 / 双音源 / 静音
+- **Screen recording:** record the device screen through Android MediaProjection.
+- **Resolution options:** native, 1080p, 720p, 480p, and 360p.
+- **Frame-rate control:** auto mode and fixed limits from 15 FPS up to 120 FPS.
+- **Codec choices:** H.264, H.265, and H.265 HDR.
+- **Audio sources:** no audio, internal audio, microphone, or both.
+- **Recording controls:** foreground notification, Quick Settings tile, and recording state handling
+  for start, stop, pause, resume, and cleanup.
+- **Super Island controls:** recording status and controls are adapted for Xiaomi Super Island on
+  supported systems.
+- **Miuix interface:** Compose UI built around Miuix components and Xiaomi/HyperOS-oriented visual
+  conventions.
+- **Xiaomi-specific settings:** privileged settings integration for Xiaomi screen recording related
+  behavior.
+- **SAF storage:** configurable recording output location through Android Storage Access Framework,
+  without requesting file or media access permissions.
+- **Privacy-first design:** no analytics, no telemetry, and no network reporting.
 
-### 界面与体验
-- **MIUI/HyperOS 优化** - 完美支持边到边显示
-- **Material Design 3** - 简洁现代的界面
-- **悬浮球控制** - 录制过程中便捷操作
-- **无水印** - 完全免费
+## Privileged Features
 
-### 高级功能
-- **自动文件管理** - 智能存储空间管理
-- **方向感知录制** - 自动适配横竖屏
-- **触摸可视化** - 录制时显示触摸点（需要 Root）
+Island Recorder can work without privileged access for normal MediaProjection-based recording. Some
+advanced features require Root or Shizuku:
 
-### 隐私保护
-- **不收集任何数据**
-- **无分析或追踪**
-- **所有录制本地存储**
-- **用户完全控制**
+- **Show screen touches:** temporarily enables Android touch visualization while recording.
+- **Xiaomi screen share protection control:** temporarily disables and restores Xiaomi screen share
+  protection around recordings when supported.
+- **Project media permission grant:** grants the app the system project media operation where
+  supported, reducing repeated capture permission friction.
+- **Xiaomi Focus Island notification bypass:** optionally uses privileged behavior to improve
+  recording notification visibility on supported Xiaomi systems.
 
----
+Privileged operations use binder hook paths through Shizuku or root `app_process`. Shizuku
+UserService/AIDL is not used.
 
-## 🚀 下载
+## Supported Android Versions
 
-从 [Releases](https://github.com/Leaf-lsgtky/IslandRecoder/releases) 页面下载最新 APK
+- **Minimum SDK:** 35 (Android 15 based HyperOS 3 only)
+- **Target SDK:** 37
 
----
+## Device Compatibility
 
-## 🛠️ 技术细节
+Island Recorder is designed for supported Xiaomi/HyperOS devices with Super Island support.
 
-- **构建语言:** Kotlin, Jetpack Compose
-- **架构:** MVVM with Clean Architecture
-- **依赖注入:** Hilt
-- **媒体框架:** MediaCodec, MediaMuxer, MediaProjection
-- **最低 SDK:** 24 (Android 7.0)
-- **目标 SDK:** 35 (Android 15)
+Not recommended:
 
----
+- non-Xiaomi devices,
+- Xiaomi devices without Super Island support,
+- ROMs where Xiaomi screen share protection, Focus Island/Super Island, or related privileged
+  settings behave differently.
 
-## 📋 权限说明
+Root/Shizuku features, Xiaomi privacy protection, Super Island behavior, and project media
+permission behavior depend on the ROM, Android version, and active authorizer.
 
-| 权限 | 用途 |
-|------|------|
-| RECORD_AUDIO | 录制系统音频和/或麦克风输入 |
-| FOREGROUND_SERVICE | 后台维持录制 |
-| POST_NOTIFICATIONS | 显示录制状态 |
-| SYSTEM_ALERT_WINDOW | 悬浮控制覆盖层 |
+## Downloads
 
----
+Download release builds from:
 
-## 🔒 隐私政策
+https://github.com/wxxsfxyzm/IslandRecoder/releases
 
-我们认真对待您的隐私。Island Recorder：
-- 不收集任何个人数据
-- 不使用分析或追踪
-- 不与第三方共享数据
-- 所有录制存储在您的设备本地
+If you report a bug, please include:
 
----
+- app version,
+- Android version and ROM,
+- selected authorizer: Root, Shizuku, or none,
+- reproduction steps,
+- relevant logcat output.
 
-## 📝 开源协议
+## Building
 
-本项目基于 **MIT License** - 详见 [LICENSE](LICENSE) 文件。
+Island Recorder is an Android Gradle project.
 
-本项目基于原 Flux Recorder 项目修改，原项目版权归 Icradle Innovations Ltd 所有。
+### Prerequisites
 
----
+- **JDK 25** with `JAVA_HOME` configured correctly.
+- Android SDK / Android Studio with the required platform and build tools installed.
+- GitHub Packages credentials for the snapshot `miuix` dependency.
 
-## 🤝 贡献
+### GitHub Packages Authentication
 
-欢迎贡献！请随时提交 Pull Request。
+GitHub Packages requires authentication for the Miuix Maven repository. Add your GitHub username and
+a classic personal access token with the `read:packages` scope to your global Gradle properties
+file:
 
----
+- Linux / macOS: `~/.gradle/gradle.properties`
+- Windows: `%USERPROFILE%\.gradle\gradle.properties`
 
-## 📧 联系方式
+```properties
+gpr.user=YOUR_GITHUB_USERNAME
+gpr.key=YOUR_PERSONAL_ACCESS_TOKEN
+```
 
-- **Issues:** [GitHub Issues](https://github.com/Leaf-lsgtky/IslandRecoder/issues)
+Do not commit these credentials to this repository.
 
----
+### Build Commands
 
-## 🙏 致谢
+For a local debug build:
 
-- 原项目：[Flux Recorder](https://github.com/Icradle-Innovations-Ltd/FluxRecorder) by Icradle Innovations Ltd
-- UI 框架：[miuix-compose](https://github.com/yukonga/miuix-compose)
+```bash
+./gradlew :app:assembleUnstableDebug
+```
 
----
+For a broader debug build that also covers helper modules:
 
-<div align="center">
+```bash
+./gradlew assembleDebug
+```
 
-使用 Kotlin 和 Jetpack Compose 构建 ❤️
+The app uses the `level` flavor dimension:
 
-</div>
+- **Unstable:** default development flavor with a git hash version suffix.
+- **Stable:** release-style version name.
 
----
+## Technical Overview
 
----
+- **Language:** Kotlin
+- **UI:** Jetpack Compose and Miuix
+- **Dependency injection:** Koin
+- **Settings:** AndroidX DataStore
+- **Recording stack:** MediaProjection, MediaCodec, MediaMuxer, AudioRecord, and MediaRecorder
+- **Privileged integration:** Shizuku and root `app_process` binder hooks
+- **Modules:** `:app`, `:app-process`, and `:hidden-api`
 
-# Island Recorder
+## Privacy
 
-<div align="center">
+Island Recorder is designed to keep recording data local.
 
-### Professional Screen Recording for Android
+- No analytics.
+- No telemetry.
+- No tracking.
+- No remote reporting.
+- Recordings are saved on the user's device.
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/Leaf-lsgtky/IslandRecoder/releases)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Android-brightgreen.svg)](https://www.android.com)
-[![Min SDK](https://img.shields.io/badge/minSdk-24-orange.svg)](https://developer.android.com/about/versions/nougat)
+## License
 
-</div>
+Island Recorder is released under the [GNU General Public License v3.0 or later](LICENSE).
 
----
+This repository contains work derived from MIT-licensed upstream projects. Their copyright and
+license notices are preserved in [NOTICE.md](NOTICE.md).
 
-## 📱 About
+## Acknowledgements
 
-**Island Recorder** is a powerful screen recording application for Android, forked from [Flux Recorder](https://github.com/Icradle-Innovations-Ltd/FluxRecorder). It retains all the original features while adding dynamic HDR recording support, MIUI/HyperOS optimizations, and more.
+This project uses code from, or is based on the implementation of, the following projects:
 
----
-
-## ✨ Features
-
-### Recording
-- **Multiple resolution options** - 1080p, 720p, 480p, 360p and native
-- **Variable frame rate** - 15/24/30/48/60/90/120 FPS
-- **Dynamic HDR support** - Auto-detect and switch HDR content during H.265 recording (Android 10+)
-- **Multiple codecs** - H.264 (AVC) / H.265 (HEVC)
-- **Flexible audio capture** - Internal / Microphone / Both / Silent
-
-### UI & UX
-- **MIUI/HyperOS Optimized** - Perfect edge-to-edge display support
-- **Material Design 3** - Clean and modern interface
-- **Floating controls** - Easy access during recording
-- **No watermarks** - Completely free
-
-### Advanced Features
-- **Automatic file management** - Smart storage management
-- **Orientation-aware recording** - Auto-adapt to portrait/landscape
-- **Touch visualization** - Show touch points during recording (Root required)
-
-### Privacy
-- **No data collection**
-- **No analytics or tracking**
-- **All recordings stored locally**
-- **Full user control**
-
----
-
-## 🚀 Download
-
-Download the latest APK from the [Releases](https://github.com/Leaf-lsgtky/IslandRecoder/releases) page
-
----
-
-## 🛠️ Technical Details
-
-- **Built with:** Kotlin, Jetpack Compose
-- **Architecture:** MVVM with Clean Architecture
-- **Dependency Injection:** Hilt
-- **Media:** MediaCodec, MediaMuxer, MediaProjection
-- **Min SDK:** 24 (Android 7.0)
-- **Target SDK:** 35 (Android 15)
-
----
-
-## 📋 Permissions
-
-| Permission | Purpose |
-|------------|---------|
-| RECORD_AUDIO | Capture system audio and/or microphone input |
-| FOREGROUND_SERVICE | Maintain recording in background |
-| POST_NOTIFICATIONS | Display recording status |
-| SYSTEM_ALERT_WINDOW | Floating control overlay |
-
----
-
-## 🔒 Privacy
-
-We take your privacy seriously. Island Recorder:
-- Does not collect any personal data
-- Does not use analytics or tracking
-- Does not share data with third parties
-- Stores all recordings locally on your device
-
----
-
-## 📝 License
-
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
-
-This project is a fork of the original Flux Recorder, copyright owned by Icradle Innovations Ltd.
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
----
-
-## 📧 Contact
-
-- **Issues:** [GitHub Issues](https://github.com/Leaf-lsgtky/IslandRecoder/issues)
-
----
-
-## 🙏 Acknowledgments
-
-- Original Project: [Flux Recorder](https://github.com/Icradle-Innovations-Ltd/FluxRecorder) by Icradle Innovations Ltd
-- UI Framework: [miuix-compose](https://github.com/yukonga/miuix-compose)
-
----
-
-<div align="center">
-
-Made with ❤️ using Kotlin and Jetpack Compose
-
-</div>
+- [Leaf-lsgtky/IslandRecoder](https://github.com/Leaf-lsgtky/IslandRecoder)
+- [IcradleInnovationsLtd/FluxRecorder](https://github.com/IcradleInnovationsLtd/FluxRecorder)
+- [RikkaApps/Shizuku](https://github.com/RikkaApps/Shizuku)
+- [compose-miuix-ui/miuix](https://github.com/compose-miuix-ui/miuix)
