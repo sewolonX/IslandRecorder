@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,9 +39,14 @@ import com.island.recorder.domain.device.provider.PermissionChecker
 import com.island.recorder.domain.recording.model.AudioSource
 import com.island.recorder.domain.recording.model.RecordingSettings
 import com.island.recorder.domain.recording.model.RecordingState
+import com.island.recorder.domain.settings.model.AppPreferences
 import com.island.recorder.domain.settings.repository.AppSettingsRepository
 import com.island.recorder.domain.settings.repository.BooleanSetting
 import com.island.recorder.domain.settings.repository.StringSetting
+import com.island.recorder.framework.privileged.Authorizer
+import com.island.recorder.framework.privileged.DeviceCapability
+import com.island.recorder.framework.privileged.RootMode
+import com.island.recorder.framework.privileged.ShizukuMode
 import com.island.recorder.framework.privileged.provider.DeviceCapabilityProvider
 import com.island.recorder.framework.service.RecorderService
 import com.island.recorder.ui.common.permission.PermissionRequester
@@ -142,10 +148,15 @@ class RecordingShortcutActivity : ComponentActivity() {
                 val appSettingsRepo = koinInject<AppSettingsRepository>()
                 val capabilityProvider = koinInject<DeviceCapabilityProvider>()
                 val scope = rememberCoroutineScope()
-                val settings by appSettingsRepo.recordingSettingsFlow.collectAsStateWithLifecycle(
-                    RecordingSettings()
+                LaunchedEffect(capabilityProvider) {
+                    capabilityProvider.refreshPrivilegeStatus()
+                }
+                val preferences by appSettingsRepo.preferencesFlow.collectAsStateWithLifecycle(
+                    AppPreferences()
                 )
+                val settings = preferences.recordingSettings
                 val capability by capabilityProvider.capabilityFlow.collectAsStateWithLifecycle()
+                val showTouchesEnabled = capability.isAuthorizerAvailable(preferences.authorizer)
                 val audioSourceRequiresPermission = settings.audioSource.usesMicrophone()
                 val permissionWarning = when {
                     !hasPostNotificationsPermissionState ->
@@ -228,22 +239,11 @@ class RecordingShortcutActivity : ComponentActivity() {
                                 )
                                 ShowTouchesSwitch(
                                     settings = settings,
-                                    enabled = capability.hasPrivilegedOperations,
+                                    enabled = showTouchesEnabled,
                                     onCheckedChange = {
                                         scope.launch {
                                             appSettingsRepo.putBoolean(
                                                 BooleanSetting.ShowTouches,
-                                                it
-                                            )
-                                        }
-                                    }
-                                )
-                                StopOnLockScreenSwitch(
-                                    settings = settings,
-                                    onCheckedChange = {
-                                        scope.launch {
-                                            appSettingsRepo.putBoolean(
-                                                BooleanSetting.StopOnLockScreen,
                                                 it
                                             )
                                         }
@@ -319,21 +319,10 @@ class RecordingShortcutActivity : ComponentActivity() {
                             )
                             ShowTouchesSwitch(
                                 settings = settings,
-                                enabled = capability.hasPrivilegedOperations,
+                                enabled = showTouchesEnabled,
                                 onCheckedChange = {
                                     scope.launch {
                                         appSettingsRepo.putBoolean(BooleanSetting.ShowTouches, it)
-                                    }
-                                }
-                            )
-                            StopOnLockScreenSwitch(
-                                settings = settings,
-                                onCheckedChange = {
-                                    scope.launch {
-                                        appSettingsRepo.putBoolean(
-                                            BooleanSetting.StopOnLockScreen,
-                                            it
-                                        )
                                     }
                                 }
                             )
@@ -370,19 +359,11 @@ class RecordingShortcutActivity : ComponentActivity() {
         this == AudioSource.MICROPHONE || this == AudioSource.BOTH
 }
 
-@Composable
-private fun StopOnLockScreenSwitch(
-    settings: RecordingSettings,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    SwitchPreference(
-        title = stringResource(R.string.stop_on_lock_screen),
-        summary = stringResource(R.string.stop_on_lock_screen_summary),
-        checked = settings.stopOnLockScreen,
-        insideMargin = PaddingValues(0.dp),
-        onCheckedChange = onCheckedChange
-    )
-}
+private fun DeviceCapability.isAuthorizerAvailable(authorizer: Authorizer): Boolean =
+    when (authorizer) {
+        Authorizer.Shizuku -> shizukuMode == ShizukuMode.Authorized
+        Authorizer.Root -> rootMode != RootMode.None
+    }
 
 @Composable
 private fun ShowTouchesSwitch(

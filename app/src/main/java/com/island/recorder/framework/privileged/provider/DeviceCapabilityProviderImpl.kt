@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import rikka.shizuku.Shizuku
 import timber.log.Timber
+import java.util.concurrent.atomic.AtomicInteger
 
 class DeviceCapabilityProviderImpl : DeviceCapabilityProvider {
     companion object {
@@ -23,6 +24,7 @@ class DeviceCapabilityProviderImpl : DeviceCapabilityProvider {
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val rootRefreshGeneration = AtomicInteger(0)
 
     private val _rootModeFlow = MutableStateFlow(RootMode.None)
     override val rootModeFlow: StateFlow<RootMode> = _rootModeFlow.asStateFlow()
@@ -53,8 +55,13 @@ class DeviceCapabilityProviderImpl : DeviceCapabilityProvider {
 
     override fun refreshPrivilegeStatus() {
         updateShizukuMode()
+        val generation = rootRefreshGeneration.incrementAndGet()
+        _rootModeFlow.value = RootMode.None
+        updateCapability()
         scope.launch(Dispatchers.IO) {
-            _rootModeFlow.value = detectRootMode()
+            val detectedRootMode = detectRootMode()
+            if (rootRefreshGeneration.get() != generation) return@launch
+            _rootModeFlow.value = detectedRootMode
             updateCapability()
         }
     }
