@@ -56,8 +56,6 @@ class DeviceCapabilityProviderImpl : DeviceCapabilityProvider {
     override fun refreshPrivilegeStatus() {
         updateShizukuMode()
         val generation = rootRefreshGeneration.incrementAndGet()
-        _rootModeFlow.value = RootMode.None
-        updateCapability()
         scope.launch(Dispatchers.IO) {
             val detectedRootMode = detectRootMode()
             if (rootRefreshGeneration.get() != generation) return@launch

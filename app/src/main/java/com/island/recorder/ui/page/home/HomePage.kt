@@ -1,7 +1,5 @@
 package com.island.recorder.ui.page.home
 
-import android.content.Context
-import android.util.DisplayMetrics
 import android.view.WindowManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -240,11 +238,10 @@ private fun SettingsSummaryCard(
 ) {
     val context = LocalContext.current
     val (screenW, screenH) = remember {
-        val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        val metrics = DisplayMetrics()
-        @Suppress("DEPRECATION")
-        wm.defaultDisplay.getRealMetrics(metrics)
-        Pair(metrics.widthPixels, metrics.heightPixels)
+        val wm = context.getSystemService(WindowManager::class.java)
+        val bounds = wm.currentWindowMetrics.bounds
+
+        bounds.width() to bounds.height()
     }
     val (qw, qh) = settings.videoQuality.computeDimensions(screenW, screenH)
     val qualityLabel = stringResource(
@@ -272,6 +269,10 @@ private fun SettingsSummaryCard(
         BasicComponent(
             title = stringResource(R.string.label_frame_rate),
             summary = stringResource(settings.frameRate.labelResId)
+        )
+        BasicComponent(
+            title = stringResource(R.string.video_codec),
+            summary = stringResource(settings.videoCodec.labelResId)
         )
     }
 }
