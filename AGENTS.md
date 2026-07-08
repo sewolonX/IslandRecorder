@@ -24,7 +24,7 @@ actual implementation.
 
 * `README.md` — product scope and user-facing behavior. Treat it as
   documentation, not the final source of truth for implementation details.
-* `PRIVACY_POLICY.md` — privacy commitments.
+  Its Privacy section is the current repository privacy reference.
 * `settings.gradle.kts` — active Gradle modules and repository setup.
 * `app/build.gradle.kts`, `build-plugins/`, and `gradle/libs.versions.toml` —
   required before changing Gradle plugins, SDK levels, toolchains, variants,
@@ -37,13 +37,17 @@ rules that future agents should repeatedly follow.
 
 ## Current architecture
 
-Island Recorder is a Kotlin Android screen recorder built around:
+Island Recorder is a Kotlin Android screen recorder for supported
+Xiaomi/HyperOS devices, with Super Island-oriented controls. It is built around:
 
 * Jetpack Compose UI with Miuix components.
 * Koin dependency injection.
 * DataStore-backed app settings.
 * MediaProjection, MediaCodec, MediaMuxer, and AudioRecord/MediaRecorder based
   recording.
+* CameraX-based floating facecam preview.
+* SAF/MediaStore recording output.
+* Navigation3 screen navigation.
 * Quick Settings tile and notification controls.
 * Optional privileged operations through Shizuku or root `app_process` binder
   hooks.
@@ -73,7 +77,7 @@ Do not assume any other top-level directory is an included module.
 Under `app/src/main/java/com/island/recorder/`:
 
 * `core/` — low-level recording primitives such as audio capture, codecs,
-  muxing, projection, and reflection helpers.
+  muxing, projection, CameraX overlay, and reflection helpers.
 * `data/` — concrete persistence and repository implementations, including
   DataStore-backed settings.
 * `di/` — Koin modules and dependency wiring.
@@ -82,8 +86,8 @@ Under `app/src/main/java/com/island/recorder/`:
 * `framework/` — Android/platform integrations: services, notifications,
   storage providers, permission checks, privileged providers, and Shizuku/root
   binder hook infrastructure.
-* `ui/` — activities, pages, navigation, Compose components, themes, and UI
-  state.
+* `ui/` — activities, Navigation3 routes/container, pages, Compose components,
+  themes, and UI state.
 * `util/` — general utilities only when they do not fit a more specific layer.
 
 Preserve these boundaries. Do not move behavior into a convenient but wrong
@@ -100,11 +104,17 @@ remote reporting, or network calls without explicit maintainer approval. Screen
 recordings and settings must remain local unless the user explicitly chooses an
 export/share action.
 
+Recordings are written through `RecordingStorageProvider`: the default path uses
+MediaStore under `DCIM/screenrecorder`, and a user-selected tree URI uses SAF.
+Do not add broad storage/media permissions when scoped MediaStore or SAF APIs can
+serve the use case.
+
 ### Native API preference
 
 Prefer existing native Android APIs, binder APIs, repository abstractions, and
 platform-facing helpers. Do not introduce shell-command implementations as a
-shortcut when a maintained native/binder path exists.
+shortcut when a maintained native/binder path exists. Root availability probing
+is the current narrow exception and lives in `DeviceCapabilityProviderImpl`.
 
 ### Privileged safety
 
@@ -165,6 +175,8 @@ The main recording lifecycle lives in `RecorderService`.
 Important state rules:
 
 * `RecordingState.Idle` means the service is ready for a new recording.
+* `RecordingState.Processing` means startup work is in progress. Treat it as
+  busy.
 * `RecordingState.Recording` and `RecordingState.Paused` mean recording is
   active.
 * `RecordingState.Stopping` means recording has been stopped but cleanup is
@@ -178,6 +190,10 @@ affects start/stop/pause/resume behavior, review notification actions,
 Heavy recording setup and cleanup must stay off the main thread. Foreground
 service and MediaProjection requirements must still be satisfied on the correct
 thread/API path.
+
+Recording output descriptors must be closed during cleanup. If a failed start or
+failed muxing path creates a partial output, use the storage provider's delete
+path rather than leaving orphan files behind.
 
 ---
 
@@ -201,6 +217,20 @@ tile. Keep it focused:
 
 ---
 
+## Floating controls and camera overlay
+
+`FloatingControlService` owns the application overlay controls and currently
+starts `CameraOverlay` for the floating front-camera preview.
+
+* Keep overlay work behind the `SYSTEM_ALERT_WINDOW` permission path.
+* Keep CameraX lifecycle ownership and cleanup explicit; release camera and
+  window views when the service or overlay closes.
+* Do not move overlay or CameraX implementation details into domain models.
+* Prefer app drawable/string resources over framework placeholder icons/text
+  when changing user-visible controls.
+
+---
+
 ## UI conventions
 
 Use Compose and existing Miuix components/patterns. Prefer current local
@@ -211,6 +241,8 @@ Guidelines:
 * Keep screen-level state collection in ViewModels or activity-level entry
   points as appropriate to the existing pattern.
 * Keep domain/data logic out of composables.
+* Use `MiuixNavContainer`, `Navigator`, and `Route` for app-screen navigation;
+  avoid introducing a parallel navigation stack.
 * Keep settings screens comprehensive, but keep shortcut/dialog surfaces compact.
 * Use existing string resources for user-visible text.
 * Avoid introducing Material-only controls where nearby UI uses Miuix components.
