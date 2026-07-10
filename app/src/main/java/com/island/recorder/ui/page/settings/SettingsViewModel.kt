@@ -25,6 +25,7 @@ class SettingsViewModel(
             currentSettings = preferences.recordingSettings,
             storageTreeUri = preferences.storageTreeUri,
             selectedAuthorizer = preferences.authorizer,
+            hideLauncherIcon = preferences.hideLauncherIcon,
             capability = capability,
             isProjectMediaGranted = isProjectMediaGranted
         )

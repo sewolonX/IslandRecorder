@@ -53,6 +53,7 @@ import com.island.recorder.domain.settings.repository.AppSettingsRepository
 import com.island.recorder.domain.settings.repository.BooleanSetting
 import com.island.recorder.domain.settings.repository.StringSetting
 import com.island.recorder.framework.privileged.Authorizer
+import com.island.recorder.framework.launcher.LauncherIconManager
 import com.island.recorder.framework.privileged.RootMode
 import com.island.recorder.framework.privileged.ShizukuMode
 import com.island.recorder.framework.storage.SafRecordingStorageProviderImpl
@@ -89,6 +90,7 @@ fun SettingsPage(
     val scope = rememberCoroutineScope()
     val appSettingsRepo = koinInject<AppSettingsRepository>()
     val permissionChecker = koinInject<PermissionChecker>()
+    val launcherIconManager = koinInject<LauncherIconManager>()
     val lifecycleOwner = LocalLifecycleOwner.current
     val uiState = viewModel.state.collectAsStateWithLifecycle().value
     val currentSettings = uiState.currentSettings
@@ -360,12 +362,21 @@ fun SettingsPage(
                             }
                         }
                     )
+                    val selectedAuthorizerAvailable = when (selectedAuthorizer) {
+                        Authorizer.Shizuku -> capability.shizukuMode == ShizukuMode.Authorized
+                        Authorizer.Root -> capability.rootMode != RootMode.None
+                    }
                     SwitchPreference(
                         title = stringResource(R.string.show_touches),
-                        summary = if (capability.hasPrivilegedOperations) stringResource(R.string.show_touches_summary)
-                        else stringResource(R.string.permission_privilege),
+                        summary = stringResource(
+                            if (selectedAuthorizerAvailable) {
+                                R.string.show_touches_summary
+                            } else {
+                                R.string.permission_privilege
+                            }
+                        ),
                         checked = currentSettings.showTouches,
-                        enabled = capability.hasPrivilegedOperations,
+                        enabled = selectedAuthorizerAvailable,
                         onCheckedChange = {
                             scope.launch {
                                 appSettingsRepo.putBoolean(
@@ -388,21 +399,42 @@ fun SettingsPage(
                             }
                         }
                     )
-                    val shizukuStatusString = when (capability.shizukuMode) {
-                        ShizukuMode.NotRunning -> stringResource(R.string.shizuku_status_not_running)
-                        ShizukuMode.NotAuthorized -> stringResource(R.string.shizuku_status_not_authorized)
-                        ShizukuMode.Authorized -> stringResource(R.string.shizuku_status_authorized)
-                    }
+                    SwitchPreference(
+                        title = stringResource(R.string.bypass_screen_share_protection),
+                        summary = stringResource(
+                            if (selectedAuthorizerAvailable) {
+                                R.string.bypass_screen_share_protection_summary
+                            } else {
+                                R.string.permission_privilege
+                            }
+                        ),
+                        checked = currentSettings.bypassScreenShareProtection,
+                        enabled = selectedAuthorizerAvailable,
+                        onCheckedChange = {
+                            scope.launch {
+                                appSettingsRepo.putBoolean(
+                                    BooleanSetting.BypassScreenShareProtection,
+                                    it
+                                )
+                            }
+                        }
+                    )
                     SwitchPreference(
                         title = stringResource(R.string.bypass_focus_island),
                         summary = stringResource(
-                            R.string.bypass_focus_island_summary,
-                            shizukuStatusString
+                            if (selectedAuthorizerAvailable) {
+                                R.string.bypass_focus_island_summary
+                            } else {
+                                R.string.permission_privilege
+                            }
                         ),
                         checked = currentSettings.bypassFocusIsland,
-                        enabled = true,
+                        enabled = selectedAuthorizerAvailable,
                         onCheckedChange = {
-                            if (it && capability.shizukuMode == ShizukuMode.NotAuthorized) {
+                            if (
+                                it && selectedAuthorizer == Authorizer.Shizuku &&
+                                capability.shizukuMode == ShizukuMode.NotAuthorized
+                            ) {
                                 viewModel.requestShizukuPermission(1001)
                             }
                             scope.launch {
@@ -491,6 +523,29 @@ fun SettingsPage(
                                     "https://github.com/Icradle-Innovations-Ltd/FluxRecorder".toUri()
                                 )
                             )
+                        }
+                    )
+                }
+            }
+
+            item {
+                Card(
+                    modifier = Modifier
+                        .padding(horizontal = 12.dp)
+                        .padding(bottom = 12.dp)
+                ) {
+                    SwitchPreference(
+                        title = stringResource(R.string.hide_launcher_icon),
+                        summary = stringResource(R.string.hide_launcher_icon_summary),
+                        checked = uiState.hideLauncherIcon,
+                        onCheckedChange = { hidden ->
+                            scope.launch {
+                                appSettingsRepo.putBoolean(
+                                    BooleanSetting.HideLauncherIcon,
+                                    hidden
+                                )
+                                launcherIconManager.setHidden(hidden)
+                            }
                         }
                     )
                 }

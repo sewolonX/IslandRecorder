@@ -8,5 +8,6 @@ data class AppPreferences(
     val storageTreeUri: String = "",
     val isFirstLaunch: Boolean = true,
     val authorizer: Authorizer = Authorizer.Shizuku,
+    val hideLauncherIcon: Boolean = false,
     val isLoaded: Boolean = false
 )

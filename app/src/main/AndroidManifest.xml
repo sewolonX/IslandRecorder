@@ -41,14 +41,21 @@
             android:theme="@style/Theme.App.Starting"
             android:configChanges="orientation|screenSize|keyboardHidden">
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-            <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+
+        <activity-alias
+            android:name="com.island.recorder.ui.activity.LauncherAlias"
+            android:enabled="true"
+            android:exported="true"
+            android:targetActivity="com.island.recorder.ui.activity.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <!-- Transparent activity for Quick Tile recording shortcut -->
         <activity

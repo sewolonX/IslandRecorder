@@ -20,10 +20,14 @@ class AppDataStore(
         val SHOW_TOUCHES: Preferences.Key<Boolean> = booleanPreferencesKey("show_touches")
         val STOP_ON_LOCK_SCREEN: Preferences.Key<Boolean> =
             booleanPreferencesKey("stop_on_lock_screen")
+        val BYPASS_SCREEN_SHARE_PROTECTION: Preferences.Key<Boolean> =
+            booleanPreferencesKey("bypass_screen_share_protection")
         val BYPASS_FOCUS_ISLAND: Preferences.Key<Boolean> = booleanPreferencesKey("bypass_focus_island")
         val TILE_STYLE: Preferences.Key<String> = stringPreferencesKey("tile_style")
         val STORAGE_TREE_URI: Preferences.Key<String> = stringPreferencesKey("storage_tree_uri")
         val AUTHORIZER: Preferences.Key<String> = stringPreferencesKey("authorizer")
+        val HIDE_LAUNCHER_ICON: Preferences.Key<Boolean> =
+            booleanPreferencesKey("hide_launcher_icon")
         val FIRST_LAUNCH: Preferences.Key<Boolean> = booleanPreferencesKey("first_launch")
     }
 

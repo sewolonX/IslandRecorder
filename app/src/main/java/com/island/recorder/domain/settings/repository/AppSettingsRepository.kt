@@ -19,7 +19,9 @@ enum class StringSetting {
 enum class BooleanSetting {
     ShowTouches,
     StopOnLockScreen,
+    BypassScreenShareProtection,
     BypassFocusIsland,
+    HideLauncherIcon,
     FirstLaunch
 }
 

@@ -90,9 +90,11 @@ class AppSettingsRepositoryImpl(
                 ),
                 frameRate = safeValueOf(prefs[AppDataStore.FRAME_RATE], FrameRate.AUTO),
                 audioSource = safeValueOf(prefs[AppDataStore.AUDIO_SOURCE], AudioSource.NONE),
-                videoCodec = safeValueOf(prefs[AppDataStore.VIDEO_CODEC], VideoCodec.H264),
+                videoCodec = safeValueOf(prefs[AppDataStore.VIDEO_CODEC], VideoCodec.H265),
                 showTouches = prefs[AppDataStore.SHOW_TOUCHES] ?: false,
                 stopOnLockScreen = prefs[AppDataStore.STOP_ON_LOCK_SCREEN] ?: false,
+                bypassScreenShareProtection =
+                    prefs[AppDataStore.BYPASS_SCREEN_SHARE_PROTECTION] ?: true,
                 bypassFocusIsland = prefs[AppDataStore.BYPASS_FOCUS_ISLAND] ?: false,
                 tileStyle = safeValueOf(prefs[AppDataStore.TILE_STYLE], TileStyle.DEFAULT)
             ),
@@ -100,6 +102,7 @@ class AppSettingsRepositoryImpl(
                 ?: SafRecordingStorageProviderImpl.DEFAULT_STORAGE_TREE_URI,
             isFirstLaunch = prefs[AppDataStore.FIRST_LAUNCH] ?: true,
             authorizer = safeValueOf(prefs[AppDataStore.AUTHORIZER], Authorizer.Shizuku),
+            hideLauncherIcon = prefs[AppDataStore.HIDE_LAUNCHER_ICON] ?: false,
             isLoaded = true
         )
 
@@ -141,7 +144,7 @@ class AppSettingsRepositoryImpl(
 
             StringSetting.VideoCodec -> preferences.copy(
                 recordingSettings = preferences.recordingSettings.copy(
-                    videoCodec = safeValueOf(value, VideoCodec.H264)
+                    videoCodec = safeValueOf(value, VideoCodec.H265)
                 )
             )
 
@@ -171,9 +174,17 @@ class AppSettingsRepositoryImpl(
                 recordingSettings = preferences.recordingSettings.copy(stopOnLockScreen = value)
             )
 
+            BooleanSetting.BypassScreenShareProtection -> preferences.copy(
+                recordingSettings = preferences.recordingSettings.copy(
+                    bypassScreenShareProtection = value
+                )
+            )
+
             BooleanSetting.BypassFocusIsland -> preferences.copy(
                 recordingSettings = preferences.recordingSettings.copy(bypassFocusIsland = value)
             )
+
+            BooleanSetting.HideLauncherIcon -> preferences.copy(hideLauncherIcon = value)
 
             BooleanSetting.FirstLaunch -> preferences.copy(isFirstLaunch = value)
         }
@@ -195,7 +206,10 @@ class AppSettingsRepositoryImpl(
         when (setting) {
             BooleanSetting.ShowTouches -> AppDataStore.SHOW_TOUCHES
             BooleanSetting.StopOnLockScreen -> AppDataStore.STOP_ON_LOCK_SCREEN
+            BooleanSetting.BypassScreenShareProtection ->
+                AppDataStore.BYPASS_SCREEN_SHARE_PROTECTION
             BooleanSetting.BypassFocusIsland -> AppDataStore.BYPASS_FOCUS_ISLAND
+            BooleanSetting.HideLauncherIcon -> AppDataStore.HIDE_LAUNCHER_ICON
             BooleanSetting.FirstLaunch -> AppDataStore.FIRST_LAUNCH
         }
 

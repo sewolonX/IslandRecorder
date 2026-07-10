@@ -10,6 +10,7 @@ data class SettingsState(
     val currentSettings: RecordingSettings = RecordingSettings(),
     val storageTreeUri: String = "",
     val selectedAuthorizer: Authorizer = Authorizer.Shizuku,
+    val hideLauncherIcon: Boolean = false,
     val capability: DeviceCapability = DeviceCapability(RootMode.None, ShizukuMode.NotRunning),
     val isProjectMediaGranted: Boolean = false
 )

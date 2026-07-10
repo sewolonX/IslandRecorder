@@ -71,8 +71,10 @@
     <string name="show_touches_summary">显示点按操作的视觉反馈</string>
     <string name="stop_on_lock_screen">锁屏时停止录制</string>
     <string name="stop_on_lock_screen_summary">屏幕锁定后自动停止当前录制</string>
+    <string name="bypass_screen_share_protection">绕过小米屏幕共享保护</string>
+    <string name="bypass_screen_share_protection_summary">录制期间临时关闭小米屏幕共享保护，并在录制结束后恢复</string>
     <string name="bypass_focus_island">绕过小米超级岛白名单</string>
-    <string name="bypass_focus_island_summary">发送通知时临时断开 XMSF 网络以绕过系统白名单限制 (需要 Shizuku)\n状态: %1$s</string>
+    <string name="bypass_focus_island_summary">发送通知时临时断开 XMSF 网络以绕过系统白名单限制</string>
     <string name="shizuku_status_authorized">已授权</string>
     <string name="shizuku_status_not_authorized">未授权</string>
     <string name="shizuku_status_tap_to_authorize">点击以授权</string>
@@ -178,4 +180,6 @@
     <string name="section_about">关于</string>
     <string name="project_url">项目地址</string>
     <string name="original_project">原项目地址</string>
+    <string name="hide_launcher_icon">隐藏桌面图标</string>
+    <string name="hide_launcher_icon_summary">隐藏后可长按快捷设置磁贴重新打开设置</string>
 </resources>
