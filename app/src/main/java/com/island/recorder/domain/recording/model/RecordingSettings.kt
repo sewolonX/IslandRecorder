@@ -114,9 +114,10 @@ data class RecordingSettings(
     val screenOrientation: ScreenOrientation = ScreenOrientation.AUTO,
     val frameRate: FrameRate = FrameRate.AUTO,
     val audioSource: AudioSource = AudioSource.NONE,
-    val videoCodec: VideoCodec = VideoCodec.H264,
+    val videoCodec: VideoCodec = VideoCodec.H265,
     val showTouches: Boolean = false,
     val stopOnLockScreen: Boolean = false,
+    val bypassScreenShareProtection: Boolean = true,
     val bypassFocusIsland: Boolean = false,
     val tileStyle: TileStyle = TileStyle.DEFAULT
 ) : Parcelable {

@@ -3,11 +3,11 @@ package com.island.recorder.framework.privileged.core.execution.runtime
 import android.annotation.SuppressLint
 import android.content.AttributionSource
 import android.content.Context
-import android.content.Intent
 import android.net.IConnectivityManager
 import android.os.Bundle
 import android.os.IBinder
 import android.provider.Settings
+import android.view.IWindowManager
 import com.android.internal.app.IAppOpsService
 import com.island.recorder.core.reflection.ReflectionProvider
 import com.island.recorder.core.reflection.invoke
@@ -31,11 +31,7 @@ class DefaultPrivilegedService private constructor(
         private const val OPSTR_PROJECT_MEDIA = "android:project_media"
         private const val SETTING_SHOW_TOUCHES = "show_touches"
         private const val SETTING_SCREEN_SHARE_PROTECTION = "screen_share_protection"
-        private const val ACTION_OPEN_SCREEN_SHARE_PROTECTION =
-            "com.miui.action.open_screen_share_protection"
-        private const val EXTRA_OPEN_SCREEN_SHARE_PROTECTION = "open_screen_share_protection"
-        private const val PERMISSION_READ_AND_WRITE_PERMISSION_MANAGER =
-            "miui.permission.READ_AND_WIRTE_PERMISSION_MANAGER"
+        private const val SETTING_SCREEN_SHARE_PROTECTION_ON = "screen_share_protection_on"
         private const val SETTING_ENABLED = "1"
         private const val SETTING_DISABLED = "0"
         private const val CALL_METHOD_GET_SECURE = "GET_secure"
@@ -43,8 +39,12 @@ class DefaultPrivilegedService private constructor(
         private const val CALL_METHOD_PUT_SYSTEM = "PUT_system"
         private const val CALL_METHOD_USER_KEY = "_user"
         private const val CALL_METHOD_OVERRIDEABLE_BY_RESTORE_KEY = "_overrideable_by_restore"
-        private const val APP_OP_NONE = -1
-        private const val FLAG_RECEIVER_INCLUDE_BACKGROUND = 0x01000000
+        private val SCREEN_SHARE_PROJECT_BLACKLIST = arrayListOf(
+            "NotificationShade",
+            "StatusBar",
+            "InputMethod",
+            "com.miui.securitycenter/com.miui.permcenter.capsule.ScreenShareProtectionActivity"
+        )
 
         fun shizukuHook() = DefaultPrivilegedService(PrivilegedRuntime.ShizukuHooked)
 
@@ -59,6 +59,10 @@ class DefaultPrivilegedService private constructor(
 
     private val connectivityManager: IConnectivityManager by lazy {
         runtime.connectivityManager()
+    }
+
+    private val windowManager: IWindowManager by lazy {
+        runtime.windowManager()
     }
 
     private val appOpsService: IAppOpsService? by lazy {
@@ -98,6 +102,10 @@ class DefaultPrivilegedService private constructor(
         return try {
             val protectionOn =
                 getSecureSettingWithHookedProvider(SETTING_SCREEN_SHARE_PROTECTION)
+            Timber.tag(TAG).d(
+                "Read screen share protection via ${runtime.name}: " +
+                    "$SETTING_SCREEN_SHARE_PROTECTION=$protectionOn."
+            )
             protectionOn == SETTING_ENABLED
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "Failed to read screen share protection via ${runtime.name}")
@@ -108,21 +116,55 @@ class DefaultPrivilegedService private constructor(
     override fun setScreenShareProtectionEnabled(enabled: Boolean): Boolean {
         return try {
             val targetValue = if (enabled) SETTING_ENABLED else SETTING_DISABLED
+            val previousEnabled =
+                getSecureSettingWithHookedProvider(SETTING_SCREEN_SHARE_PROTECTION)
+            val previousRuntimeEnabled =
+                getSecureSettingWithHookedProvider(SETTING_SCREEN_SHARE_PROTECTION_ON)
+            Timber.tag(TAG).i(
+                "Updating screen share protection via ${runtime.name}: enabled=$enabled " +
+                    "before[$SETTING_SCREEN_SHARE_PROTECTION=$previousEnabled, " +
+                    "$SETTING_SCREEN_SHARE_PROTECTION_ON=$previousRuntimeEnabled]."
+            )
             putSecureSettingWithHookedProvider(
                 SETTING_SCREEN_SHARE_PROTECTION,
                 targetValue
             )
-            broadcastScreenShareProtectionChanged(enabled)
-            val actualEnabled = isScreenShareProtectionEnabled()
-            if (actualEnabled != enabled) {
+            Timber.tag(TAG).d(
+                "Wrote $SETTING_SCREEN_SHARE_PROTECTION=$targetValue via ${runtime.name}."
+            )
+            putSecureSettingWithHookedProvider(
+                SETTING_SCREEN_SHARE_PROTECTION_ON,
+                targetValue
+            )
+            Timber.tag(TAG).d(
+                "Wrote $SETTING_SCREEN_SHARE_PROTECTION_ON=$targetValue via ${runtime.name}."
+            )
+            val blacklistUpdated = setScreenShareProjectBlackList(enabled)
+            val actualValue =
+                getSecureSettingWithHookedProvider(SETTING_SCREEN_SHARE_PROTECTION)
+            val actualRuntimeValue =
+                getSecureSettingWithHookedProvider(SETTING_SCREEN_SHARE_PROTECTION_ON)
+            val actualEnabled = actualValue == SETTING_ENABLED
+            val actualRuntimeEnabled = actualRuntimeValue == SETTING_ENABLED
+            Timber.tag(TAG).i(
+                "Screen share protection update result via ${runtime.name}: " +
+                    "expected=$targetValue " +
+                    "after[$SETTING_SCREEN_SHARE_PROTECTION=$actualValue, " +
+                    "$SETTING_SCREEN_SHARE_PROTECTION_ON=$actualRuntimeValue] " +
+                    "windowBlacklistUpdated=$blacklistUpdated."
+            )
+            if (actualEnabled != enabled || actualRuntimeEnabled != enabled) {
                 Timber.tag(TAG).w(
                     "Screen share protection readback mismatch via ${runtime.name}: " +
-                        "expected=$enabled actual=$actualEnabled."
+                        "expected=$enabled actual=$actualEnabled " +
+                        "runtimeActual=$actualRuntimeEnabled " +
+                        "windowBlacklistUpdated=$blacklistUpdated."
                 )
                 return false
             }
             Timber.tag(TAG).i(
-                "Set screen share protection to $targetValue via ${runtime.name}."
+                "Set screen share protection to $targetValue via ${runtime.name}; " +
+                        "windowBlacklistUpdated=$blacklistUpdated."
             )
             true
         } catch (e: Exception) {
@@ -131,27 +173,24 @@ class DefaultPrivilegedService private constructor(
         }
     }
 
-    private fun broadcastScreenShareProtectionChanged(enabled: Boolean) {
-        val intent = Intent(ACTION_OPEN_SCREEN_SHARE_PROTECTION).apply {
-            putExtra(EXTRA_OPEN_SCREEN_SHARE_PROTECTION, enabled)
-            addFlags(FLAG_RECEIVER_INCLUDE_BACKGROUND)
+    private fun setScreenShareProjectBlackList(enabled: Boolean): Boolean {
+        return try {
+            if (enabled) {
+                windowManager.setScreenShareProjectBlackList(SCREEN_SHARE_PROJECT_BLACKLIST)
+            } else {
+                windowManager.setScreenShareProjectBlackList(null)
+            }
+            Timber.tag(TAG).d(
+                "Set screen share project blacklist enabled=$enabled via ${runtime.name}."
+            )
+            true
+        } catch (e: Throwable) {
+            Timber.tag(TAG).e(
+                e,
+                "Failed to set screen share project blacklist via ${runtime.name}"
+            )
+            false
         }
-        runtime.activityManager().broadcastIntent(
-            null,
-            intent,
-            null,
-            null,
-            0,
-            null,
-            null,
-            arrayOf(PERMISSION_READ_AND_WRITE_PERMISSION_MANAGER),
-            APP_OP_NONE,
-            null,
-            false,
-            false,
-            context.applicationInfo.uid / 100000
-        )
-        Timber.tag(TAG).d("Broadcasted screen share protection change via ${runtime.name}.")
     }
 
     private fun putSystemSettingWithHookedProvider(name: String, value: String) {

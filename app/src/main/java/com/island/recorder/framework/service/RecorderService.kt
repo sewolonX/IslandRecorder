@@ -13,6 +13,7 @@ import android.hardware.display.DisplayManager
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import android.service.quicksettings.TileService
 import android.view.Display
 import com.island.recorder.R
@@ -28,6 +29,7 @@ import com.island.recorder.domain.recording.model.RecordingState
 import com.island.recorder.domain.recording.model.ScreenOrientation
 import com.island.recorder.domain.recording.provider.RecordingStorageProvider
 import com.island.recorder.framework.notification.RecordingNotificationManager
+import com.island.recorder.framework.privileged.core.infrastructure.lifecycle.RecordingRootProcessSession
 import com.island.recorder.framework.privileged.provider.PrivilegedOperationProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -61,6 +63,8 @@ class RecorderService : Service() {
     private val binder = RecorderBinder()
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val privilegedOperations: PrivilegedOperationProvider by inject()
+    private val rootProcessSession: RecordingRootProcessSession by inject()
+    private val appScope: CoroutineScope by inject()
     private val recordingStorageProvider: RecordingStorageProvider by inject()
 
     private val recordingNotificationManager: RecordingNotificationManager by inject()
@@ -78,6 +82,8 @@ class RecorderService : Service() {
     private var cleanupJob: Job? = null
 
     private var startTime: Long = 0
+    private var startupTraceStartElapsedMs: Long = 0
+    private var captureStartElapsedMs: Long = 0
     private var pausedDuration: Long = 0
     private var pauseStartTime: Long = 0
     private var currentSettings: RecordingSettings? = null
@@ -119,6 +125,7 @@ class RecorderService : Service() {
         const val EXTRA_RESULT_DATA = "result_data"
         const val EXTRA_SETTINGS = "settings"
         const val DIAGNOSTIC_FPS_TAG = "IR-Fps"
+        const val STARTUP_TIMING_TAG = "IR-Startup"
         const val VIDEO_FPS_LOG_WINDOW_US = 2_000_000L
 
         private val _recordingState = MutableStateFlow<RecordingState>(RecordingState.Idle)
@@ -151,6 +158,11 @@ class RecorderService : Service() {
 
                 if (resultData != null && settings != null) {
                     startRecording(resultCode, resultData, settings)
+                } else {
+                    appScope.launch(Dispatchers.IO) {
+                        rootProcessSession.releaseRecorderService()
+                    }
+                    stopSelf()
                 }
             }
 
@@ -167,6 +179,22 @@ class RecorderService : Service() {
     }
 
     private fun startRecording(resultCode: Int, data: Intent, settings: RecordingSettings) {
+        val startupStartElapsedMs = SystemClock.elapsedRealtime()
+        var lastStartupMarkElapsedMs = startupStartElapsedMs
+        startupTraceStartElapsedMs = startupStartElapsedMs
+        captureStartElapsedMs = 0L
+
+        fun logStartupStep(step: String) {
+            val now = SystemClock.elapsedRealtime()
+            Timber.tag(STARTUP_TIMING_TAG).d(
+                "$step deltaMs=${now - lastStartupMarkElapsedMs} " +
+                    "totalMs=${now - startupStartElapsedMs}"
+            )
+            lastStartupMarkElapsedMs = now
+        }
+
+        logStartupStep("startRecording entered")
+
         if (_recordingState.value !is RecordingState.Idle) {
             Timber.w("Recording already in progress")
             return
@@ -188,6 +216,7 @@ class RecorderService : Service() {
 
         // Show processing state immediately for responsive UI
         _recordingState.value = RecordingState.Processing(0)
+        logStartupStep("state set Processing")
 
         try {
             // Start foreground service (must happen on main thread)
@@ -195,16 +224,22 @@ class RecorderService : Service() {
                 0L,
                 bypass = settings.bypassFocusIsland
             )
+            logStartupStep("notification created")
             var foregroundServiceType = ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
             if (settings.audioSource.usesMicrophone()) {
                 foregroundServiceType =
                     foregroundServiceType or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
             }
-            startForeground(
-                RecordingNotificationManager.NOTIFICATION_ID,
-                notification,
-                foregroundServiceType
-            )
+            recordingNotificationManager.runWithSuperIslandBypass(
+                bypass = settings.bypassFocusIsland
+            ) {
+                startForeground(
+                    RecordingNotificationManager.NOTIFICATION_ID,
+                    notification,
+                    foregroundServiceType
+                )
+            }
+            logStartupStep("startForeground completed")
 
             // Initialize MediaProjection (must happen on main thread before API calls)
             if (!screenCaptureManager.initializeProjection(resultCode, data)) {
@@ -214,6 +249,7 @@ class RecorderService : Service() {
                 stopSelf()
                 return
             }
+            logStartupStep("mediaProjection initialized")
 
         } catch (e: Exception) {
             Timber.e(e, "Error starting foreground/projection")
@@ -231,27 +267,41 @@ class RecorderService : Service() {
                     val touchVisualizationEnabled = withContext(Dispatchers.IO) {
                         privilegedOperations.setShowTouches(true)
                     }
+                    logStartupStep("setShowTouches completed success=$touchVisualizationEnabled")
                     if (touchVisualizationEnabled) {
                         this@RecorderService.touchVisualizationEnabled = true
                         Timber.d("Touch visualization enabled for recording")
                     }
                 }
 
-                val screenShareProtectionEnabled = withContext(Dispatchers.IO) {
-                    privilegedOperations.isScreenShareProtectionEnabled()
-                }
-                if (screenShareProtectionEnabled) {
-                    val disabled = withContext(Dispatchers.IO) {
-                        privilegedOperations.setScreenShareProtectionEnabled(false)
+                if (settings.bypassScreenShareProtection) {
+                    val screenShareProtectionEnabled = withContext(Dispatchers.IO) {
+                        privilegedOperations.isScreenShareProtectionEnabled()
                     }
-                    if (disabled) {
-                        screenShareProtectionDisabledForRecording = true
-                        Timber.d("Screen share protection disabled for recording")
+                    Timber.tag(STARTUP_TIMING_TAG).i(
+                        "Screen share protection before recording: " +
+                            "enabled=$screenShareProtectionEnabled " +
+                            "capability=${privilegedOperations.capability()}"
+                    )
+                    if (screenShareProtectionEnabled) {
+                        val disabled = withContext(Dispatchers.IO) {
+                            privilegedOperations.setScreenShareProtectionEnabled(false)
+                        }
+                        logStartupStep("screenShareProtection disabled success=$disabled")
+                        if (disabled) {
+                            screenShareProtectionDisabledForRecording = true
+                            Timber.d("Screen share protection disabled for recording")
+                        }
                     }
+                } else {
+                    Timber.tag(STARTUP_TIMING_TAG).i(
+                        "Screen share protection bypass disabled in recording settings"
+                    )
                 }
 
                 // Create output file
                 recordingOutput = recordingStorageProvider.createRecordingOutput()
+                logStartupStep("recording output created")
 
                 // Calculate dimensions based on device screen and quality tier
                 val (screenWidth, screenHeight) = screenCaptureManager.getScreenDimensions()
@@ -273,56 +323,10 @@ class RecorderService : Service() {
                         rawW
                     )
                 }
+                logStartupStep("recording dimensions resolved ${width}x$height")
 
-                // Initialize encoder
-                val maxRefreshRate = screenCaptureManager.getMaxRefreshRate()
-                val frameRate = settings.frameRate.fps.takeIf { it > 0 } ?: maxRefreshRate
-                val bitrate = settings.calculateBitrate(width, height, maxRefreshRate)
-                screenCaptureManager.logDisplayDiagnostics(
-                    targetFrameRate = frameRate,
-                    requestedWidth = width,
-                    requestedHeight = height
-                )
-                videoEncoder = get {
-                    parametersOf(
-                        width,
-                        height,
-                        bitrate,
-                        frameRate,
-                        settings.frameRate.fps.takeIf { it > 0 },
-                        settings.videoCodec.mimeType,
-                        settings.videoCodec.isHdrEnabled
-                    )
-                }
-
-                val encoderSurface = videoEncoder?.prepare()
-                if (encoderSurface == null) {
-                    withContext(Dispatchers.Main) {
-                        _recordingState.value =
-                            RecordingState.Error(getString(R.string.error_encoder))
-                        stopSelf()
-                    }
-                    return@launch
-                }
-
-                // Create virtual display
-                val virtualDisplay = screenCaptureManager.createVirtualDisplay(
-                    encoderSurface,
-                    width,
-                    height,
-                    screenCaptureManager.getScreenDensity()
-                )
-
-                if (virtualDisplay == null) {
-                    withContext(Dispatchers.Main) {
-                        _recordingState.value =
-                            RecordingState.Error(getString(R.string.error_virtual_display))
-                        stopSelf()
-                    }
-                    return@launch
-                }
-
-                // Setup Audio Encoder & Recorder
+                // Setup Audio Encoder & Recorder before screen capture starts so the video
+                // writer does not sit behind audio initialization after VirtualDisplay creation.
                 var audioEnabled = false
                 Timber.d("Audio Source Setting: ${settings.audioSource}")
 
@@ -363,8 +367,9 @@ class RecorderService : Service() {
                 } else {
                     Timber.w("Audio source is NONE - no audio will be recorded")
                 }
+                logStartupStep("audio prepared enabled=$audioEnabled")
 
-                // Initialize muxer
+                // Initialize muxer before VirtualDisplay starts producing frames.
                 val output = recordingOutput
                     ?: throw IllegalStateException("Recording output is unavailable")
                 muxer = MediaMuxerWrapper(
@@ -374,11 +379,67 @@ class RecorderService : Service() {
                     prepare()
                     setAudioExpected(audioEnabled)
                 }
+                logStartupStep("muxer prepared")
+
+                // Initialize encoder
+                val maxRefreshRate = screenCaptureManager.getMaxRefreshRate()
+                val frameRate = settings.frameRate.fps.takeIf { it > 0 } ?: maxRefreshRate
+                val bitrate = settings.calculateBitrate(width, height, maxRefreshRate)
+                screenCaptureManager.logDisplayDiagnostics(
+                    targetFrameRate = frameRate,
+                    requestedWidth = width,
+                    requestedHeight = height
+                )
+                videoEncoder = get {
+                    parametersOf(
+                        width,
+                        height,
+                        bitrate,
+                        frameRate,
+                        settings.frameRate.fps.takeIf { it > 0 },
+                        settings.videoCodec.mimeType,
+                        settings.videoCodec.isHdrEnabled
+                    )
+                }
+
+                val encoderSurface = videoEncoder?.prepare()
+                logStartupStep("video encoder prepared surface=${encoderSurface != null}")
+                if (encoderSurface == null) {
+                    withContext(Dispatchers.Main) {
+                        _recordingState.value =
+                            RecordingState.Error(getString(R.string.error_encoder))
+                        stopSelf()
+                    }
+                    return@launch
+                }
+
+                // Create virtual display as the last blocking startup step. From this point on,
+                // timestamps are normalized to this start marker and drain loops begin promptly.
+                val recordingStartTimestampUs = System.nanoTime() / 1000
+                startTime = System.currentTimeMillis()
+                captureStartElapsedMs = SystemClock.elapsedRealtime()
+                muxer?.setRecordingStartTimestampUs(recordingStartTimestampUs)
+                val virtualDisplay = screenCaptureManager.createVirtualDisplay(
+                    encoderSurface,
+                    width,
+                    height,
+                    screenCaptureManager.getScreenDensity()
+                )
+
+                if (virtualDisplay == null) {
+                    withContext(Dispatchers.Main) {
+                        _recordingState.value =
+                            RecordingState.Error(getString(R.string.error_virtual_display))
+                        stopSelf()
+                    }
+                    return@launch
+                }
+                logStartupStep("virtualDisplay created")
 
                 // Start recording loop
-                startTime = System.currentTimeMillis()
                 resetVideoFpsDiagnostics()
                 _recordingState.value = RecordingState.Recording(0)
+                logStartupStep("state set Recording")
                 requestTileRefresh(this@RecorderService)
                 val bypass = settings.bypassFocusIsland
                 recordingNotificationManager.updateNotification(
@@ -389,11 +450,13 @@ class RecorderService : Service() {
                 recordingJob = serviceScope.launch {
                     recordingLoop()
                 }
+                logStartupStep("video loop launched")
 
                 if (audioEnabled) {
                     audioJob = serviceScope.launch(Dispatchers.IO) {
                         audioLoop()
                     }
+                    logStartupStep("audio loop launched")
                 }
 
                 Timber.d("Recording started")
@@ -508,6 +571,11 @@ class RecorderService : Service() {
             lastVideoPresentationTimeUs = presentationTimeUs
             videoFramesInWindow = 1
             videoTotalFrames = 1
+            val now = SystemClock.elapsedRealtime()
+            Timber.tag(STARTUP_TIMING_TAG).d(
+                "first video sample totalMs=${now - startupTraceStartElapsedMs} " +
+                    "afterCaptureStartMs=${now - captureStartElapsedMs} ptsUs=$presentationTimeUs"
+            )
             Timber.tag(DIAGNOSTIC_FPS_TAG).d("videoOutput firstPtsUs=$presentationTimeUs")
             return
         }
@@ -561,6 +629,7 @@ class RecorderService : Service() {
         val bufferSize = audioRecorder?.getBufferSize() ?: 4096
         val audioBuffer = ByteArray(bufferSize)
         var readCount = 0
+        var firstAudioReadLogged = false
 
         Timber.d("Starting audio loop with buffer size: $bufferSize")
 
@@ -580,6 +649,15 @@ class RecorderService : Service() {
 
                 if (readResult > 0) {
                     readCount++
+                    if (!firstAudioReadLogged) {
+                        firstAudioReadLogged = true
+                        val now = SystemClock.elapsedRealtime()
+                        Timber.tag(STARTUP_TIMING_TAG).d(
+                            "first audio read totalMs=${now - startupTraceStartElapsedMs} " +
+                                "afterCaptureStartMs=${now - captureStartElapsedMs} " +
+                                "bytes=$readResult"
+                        )
+                    }
                     if (readCount % 100 == 0) {
                         Timber.d("Audio read count: $readCount, bytes: $readResult")
                     }
@@ -613,6 +691,11 @@ class RecorderService : Service() {
                                 if (format != null && !audioTrackAdded) {
                                     muxer?.addAudioTrack(format)
                                     audioTrackAdded = true
+                                    val now = SystemClock.elapsedRealtime()
+                                    Timber.tag(STARTUP_TIMING_TAG).d(
+                                        "audio track added totalMs=${now - startupTraceStartElapsedMs} " +
+                                            "afterCaptureStartMs=${now - captureStartElapsedMs}"
+                                    )
                                     Timber.d("?Audio track added to muxer")
                                 }
                             }
@@ -767,11 +850,20 @@ class RecorderService : Service() {
 
                 // Restore screen share protection only if this service disabled it.
                 if (screenShareProtectionDisabledForRecording) {
-                    if (privilegedOperations.setScreenShareProtectionEnabled(true)) {
+                    Timber.tag(STARTUP_TIMING_TAG).i(
+                        "Restoring screen share protection after recording"
+                    )
+                    val restored = privilegedOperations.setScreenShareProtectionEnabled(true)
+                    if (restored) {
                         Timber.d("Screen share protection restored after recording")
                     }
+                    Timber.tag(STARTUP_TIMING_TAG).i(
+                        "Screen share protection restore completed success=$restored"
+                    )
                     screenShareProtectionDisabledForRecording = false
                 }
+
+                rootProcessSession.releaseRecorderService()
 
                 withContext(Dispatchers.Main) {
                     _recordingState.value = RecordingState.Idle
@@ -798,9 +890,15 @@ class RecorderService : Service() {
         val cleanup = cleanupJob
         if (cleanup?.isActive == true) {
             cleanup.invokeOnCompletion {
+                appScope.launch(Dispatchers.IO) {
+                    rootProcessSession.releaseRecorderService()
+                }
                 serviceScope.cancel()
             }
         } else {
+            appScope.launch(Dispatchers.IO) {
+                rootProcessSession.releaseRecorderService()
+            }
             serviceScope.cancel()
         }
         Timber.d("RecorderService destroyed")

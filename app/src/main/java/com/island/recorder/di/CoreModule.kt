@@ -9,8 +9,11 @@ import com.island.recorder.core.reflection.ReflectionProviderImpl
 import com.island.recorder.domain.device.provider.PermissionChecker
 import com.island.recorder.domain.recording.provider.RecordingStorageProvider
 import com.island.recorder.framework.notification.RecordingNotificationManager
+import com.island.recorder.framework.launcher.LauncherIconManager
 import com.island.recorder.framework.permission.AndroidPermissionChecker
 import com.island.recorder.framework.privileged.core.infrastructure.lifecycle.RecyclerManager
+import com.island.recorder.framework.privileged.core.infrastructure.lifecycle.RecordingRootProcessSession
+import com.island.recorder.framework.privileged.core.infrastructure.lifecycle.PROCESS_HOOK_RECYCLER_MANAGER_QUALIFIER
 import com.island.recorder.framework.privileged.core.infrastructure.process.AppProcessTerminal
 import com.island.recorder.framework.privileged.core.infrastructure.recycler.AppProcessRecycler
 import com.island.recorder.framework.privileged.core.infrastructure.recycler.ProcessHookRecycler
@@ -21,10 +24,12 @@ import com.island.recorder.framework.privileged.provider.PrivilegedOperationProv
 import com.island.recorder.framework.storage.SafRecordingStorageProviderImpl
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
+import org.koin.core.qualifier.named
 
 val coreModule = module {
     single<ReflectionProvider> { ReflectionProviderImpl() }
     single<PermissionChecker> { AndroidPermissionChecker(androidContext()) }
+    single { LauncherIconManager(androidContext()) }
     factory { ScreenCaptureManager(androidContext()) }
     factory { RecordingNotificationManager(androidContext(), get()) }
     factory { AudioRecorder() }
@@ -49,12 +54,17 @@ val coreModule = module {
             )
         }
     }
-    factory { (terminal: AppProcessTerminal) ->
-        ProcessHookRecycler(
-            terminal = terminal,
-            context = androidContext(),
-            appProcessRecyclerManager = get()
-        )
+    single(named(PROCESS_HOOK_RECYCLER_MANAGER_QUALIFIER)) {
+        RecyclerManager<AppProcessTerminal, ProcessHookRecycler> { terminal ->
+            ProcessHookRecycler(
+                terminal = terminal,
+                context = androidContext(),
+                appProcessRecyclerManager = get()
+            )
+        }
+    }
+    single {
+        RecordingRootProcessSession(get(named(PROCESS_HOOK_RECYCLER_MANAGER_QUALIFIER)))
     }
     single { ShizukuHookRecycler() }
     single { PrivilegedOperationProvider(androidContext(), get(), get(), get()) }

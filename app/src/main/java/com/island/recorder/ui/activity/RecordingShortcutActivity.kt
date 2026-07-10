@@ -48,11 +48,15 @@ import com.island.recorder.framework.privileged.DeviceCapability
 import com.island.recorder.framework.privileged.RootMode
 import com.island.recorder.framework.privileged.ShizukuMode
 import com.island.recorder.framework.privileged.provider.DeviceCapabilityProvider
+import com.island.recorder.framework.privileged.core.infrastructure.lifecycle.RecordingRootProcessSession
 import com.island.recorder.framework.service.RecorderService
 import com.island.recorder.ui.common.permission.PermissionRequester
 import com.island.recorder.ui.theme.IslandRecorderTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.android.ext.android.inject
 import org.koin.compose.koinInject
 import timber.log.Timber
@@ -71,6 +75,9 @@ class RecordingShortcutActivity : ComponentActivity() {
 
     private val appSettingsRepo: AppSettingsRepository by inject()
     private val permissionChecker: PermissionChecker by inject()
+    private val appScope: CoroutineScope by inject()
+    private val rootProcessSession: RecordingRootProcessSession by inject()
+    private var rootProcessSessionOwner = 0L
     private lateinit var permissionRequester: PermissionRequester
 
     private val mediaProjectionLauncher = registerForActivityResult(
@@ -86,7 +93,19 @@ class RecordingShortcutActivity : ComponentActivity() {
                         putExtra(RecorderService.EXTRA_RESULT_DATA, result.data)
                         putExtra(RecorderService.EXTRA_SETTINGS, settings)
                     }
-                startService(intent)
+                if (appSettingsRepo.currentPreferences.authorizer == Authorizer.Root) {
+                    withContext(Dispatchers.IO) {
+                        rootProcessSession.handOffToRecorderService(rootProcessSessionOwner)
+                    }
+                }
+                try {
+                    startService(intent)
+                } catch (e: Exception) {
+                    withContext(Dispatchers.IO) {
+                        rootProcessSession.releaseRecorderService()
+                    }
+                    throw e
+                }
                 finish()
             }
         } else {
@@ -124,11 +143,21 @@ class RecordingShortcutActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        rootProcessSessionOwner = savedInstanceState?.getLong(ROOT_SESSION_OWNER_KEY)
+            ?.takeIf { it != 0L }
+            ?: rootProcessSession.newShortcutOwner()
         permissionRequester = PermissionRequester(this, permissionChecker)
 
         if (RecorderService.recordingState.value !is RecordingState.Idle) {
             finish()
             return
+        }
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            val preferences = appSettingsRepo.preferencesFlow.first()
+            if (preferences.authorizer == Authorizer.Root) {
+                rootProcessSession.warmUpForShortcut(rootProcessSessionOwner)
+            }
         }
 
         var hasRecordAudioPermissionState by mutableStateOf(hasRecordAudioPermission())
@@ -357,6 +386,24 @@ class RecordingShortcutActivity : ComponentActivity() {
 
     private fun AudioSource.usesMicrophone(): Boolean =
         this == AudioSource.MICROPHONE || this == AudioSource.BOTH
+
+    override fun onDestroy() {
+        if (!isChangingConfigurations) {
+            appScope.launch(Dispatchers.IO) {
+                rootProcessSession.releaseShortcut(rootProcessSessionOwner)
+            }
+        }
+        super.onDestroy()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putLong(ROOT_SESSION_OWNER_KEY, rootProcessSessionOwner)
+        super.onSaveInstanceState(outState)
+    }
+
+    private companion object {
+        private const val ROOT_SESSION_OWNER_KEY = "root_session_owner"
+    }
 }
 
 private fun DeviceCapability.isAuthorizerAvailable(authorizer: Authorizer): Boolean =

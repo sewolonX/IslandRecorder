@@ -11,7 +11,7 @@ import java.io.PrintWriter
 
 class AppProcessRecycler(private val terminal: AppProcessTerminal) : Recycler<AppProcess>() {
 
-    override val delayDuration: Long = 100L
+    override val delayDuration: Long = 0L
 
     private class CustomizeAppProcess(private val shell: ShellCommand) : AppProcess.Default() {
         override fun newProcess(params: ProcessParams): Process {

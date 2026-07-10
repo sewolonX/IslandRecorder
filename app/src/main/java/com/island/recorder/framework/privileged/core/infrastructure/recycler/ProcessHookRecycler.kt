@@ -15,7 +15,7 @@ class ProcessHookRecycler(
     private val appProcessRecyclerManager: RecyclerManager<AppProcessTerminal, AppProcessRecycler>
 ) : Recycler<ProcessHookRecycler.HookedUserService>() {
 
-    override val delayDuration: Long = 5_000L
+    override val delayDuration: Long = 0L
 
     class HookedUserService(
         private val appProcessHandle: Recyclable<AppProcess>

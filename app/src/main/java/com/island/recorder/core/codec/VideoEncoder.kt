@@ -44,6 +44,7 @@ class VideoEncoder(
         const val COLOR_RANGE_LIMITED = 2
         const val COLOR_RANGE_FULL = 1
         const val DIAGNOSTIC_CODEC_TAG = "IR-Codec"
+        const val LOG_ENCODER_CAPABILITIES_ON_PREPARE = false
     }
 
     /**
@@ -63,7 +64,9 @@ class VideoEncoder(
 
     fun prepare(): Surface? {
         try {
-            logEncoderCapabilityDiagnostics()
+            if (LOG_ENCODER_CAPABILITIES_ON_PREPARE) {
+                logEncoderCapabilityDiagnostics()
+            }
 
             val format = MediaFormat.createVideoFormat(mimeType, width, height).apply {
                 setInteger(

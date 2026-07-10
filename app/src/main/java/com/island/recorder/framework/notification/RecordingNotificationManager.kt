@@ -21,6 +21,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -56,7 +57,7 @@ class RecordingNotificationManager(
         const val CHANNEL_ID = "recording_channel"
         const val NOTIFICATION_ID = 1001
         private const val XMSF_PACKAGE = "com.xiaomi.xmsf"
-        private const val SUPER_ISLAND_BLOCKING_INTERVAL_MS = 100
+        private const val SUPER_ISLAND_BLOCKING_INTERVAL_MS = 125
         private const val ACTION_PAUSE_RESUME_REQUEST_CODE = 1
         private const val ACTION_STOP_REQUEST_CODE = 2
         private const val CONTENT_REQUEST_CODE = 3
@@ -95,6 +96,46 @@ class RecordingNotificationManager(
         }
 
         notifyWithSuperIslandBypass(notification)
+    }
+
+    fun runWithSuperIslandBypass(bypass: Boolean = false, block: () -> Unit) {
+        if (!bypass || !privilegedOperations.capability().hasPrivilegedOperations) {
+            block()
+            return
+        }
+
+        val targetUid = xmsfUid
+        if (targetUid == null) {
+            block()
+            return
+        }
+
+        val blocked = try {
+            runBlocking(Dispatchers.IO) {
+                privilegedOperations.setPackageNetworkingEnabled(targetUid, false)
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to block XMSF network for Super Island bypass")
+            false
+        }
+        if (blocked) {
+            isXmsfNetworkBlocked = true
+        }
+
+        try {
+            block()
+        } finally {
+            if (blocked) {
+                scope.launch {
+                    delay(SUPER_ISLAND_BLOCKING_INTERVAL_MS.milliseconds)
+                    superIslandMutex.withLock {
+                        withContext(NonCancellable) {
+                            restoreXmsfNetworkIfNeeded()
+                        }
+                    }
+                }
+            }
+        }
     }
 
     fun release() {
@@ -390,9 +431,11 @@ class RecordingNotificationManager(
         scope.launch {
             superIslandMutex.withLock {
                 try {
-                    if (privilegedOperations.setPackageNetworkingEnabled(targetUid, false)) {
-                        isXmsfNetworkBlocked = true
+                    if (!privilegedOperations.setPackageNetworkingEnabled(targetUid, false)) {
+                        notificationManager.notify(NOTIFICATION_ID, notification)
+                        return@withLock
                     }
+                    isXmsfNetworkBlocked = true
                     notificationManager.notify(NOTIFICATION_ID, notification)
                     delay(SUPER_ISLAND_BLOCKING_INTERVAL_MS.milliseconds)
                 } catch (e: Exception) {
@@ -412,11 +455,21 @@ class RecordingNotificationManager(
         if (!isXmsfNetworkBlocked) return
 
         try {
-            privilegedOperations.setPackageNetworkingEnabled(targetUid, true)
+            if (privilegedOperations.setPackageNetworkingEnabled(targetUid, true)) {
+                isXmsfNetworkBlocked = false
+                Timber.d("Restored XMSF network after Super Island bypass")
+            } else {
+                Timber.e(
+                    "Failed to restore XMSF network after Super Island bypass; " +
+                        "keeping blocked state for retry"
+                )
+            }
         } catch (e: Exception) {
-            Timber.e(e, "Failed to restore XMSF network")
-        } finally {
-            isXmsfNetworkBlocked = false
+            Timber.e(
+                e,
+                "Failed to restore XMSF network after Super Island bypass; " +
+                    "keeping blocked state for retry"
+            )
         }
     }
 

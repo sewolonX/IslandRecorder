@@ -6,6 +6,7 @@ import android.app.IActivityManager
 import android.content.Context
 import android.net.IConnectivityManager
 import android.os.IBinder
+import android.view.IWindowManager
 import com.island.recorder.core.reflection.ReflectionProvider
 import com.island.recorder.core.reflection.getStaticValue
 import com.island.recorder.core.reflection.getValue
@@ -61,6 +62,19 @@ object ShizukuHook : KoinComponent {
             }
         } catch (e: Exception) {
             Timber.tag("ShizukuHook").e(e, "Failed to create hooked IConnectivityManager")
+            throw e
+        }
+    }
+
+    val hookedWindowManager: IWindowManager by lazy {
+        Timber.tag("ShizukuHook").d("Creating on-demand hooked IWindowManager...")
+        try {
+            val originalBinder = SystemServiceHelper.getSystemService(Context.WINDOW_SERVICE)
+            IWindowManager.Stub.asInterface(ShizukuBinderWrapper(originalBinder)).also {
+                Timber.tag("ShizukuHook").i("On-demand hooked IWindowManager created.")
+            }
+        } catch (e: Exception) {
+            Timber.tag("ShizukuHook").e(e, "Failed to create hooked IWindowManager")
             throw e
         }
     }

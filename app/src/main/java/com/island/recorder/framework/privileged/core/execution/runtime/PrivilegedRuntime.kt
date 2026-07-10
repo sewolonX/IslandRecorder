@@ -7,6 +7,7 @@ import android.content.Context
 import android.net.IConnectivityManager
 import android.os.IBinder
 import android.os.ServiceManager
+import android.view.IWindowManager
 import com.island.recorder.core.reflection.ReflectionProvider
 import com.island.recorder.framework.privileged.core.context.hook.ShizukuHook
 import com.island.recorder.framework.privileged.core.context.hook.resolveSettingsBinder
@@ -27,6 +28,8 @@ internal sealed interface PrivilegedRuntime {
     fun settingsBinder(reflect: ReflectionProvider, settingsClass: Class<*>): IBinder?
 
     fun connectivityManager(): IConnectivityManager
+
+    fun windowManager(): IWindowManager
 
     fun appOpsBinder(): IBinder?
 
@@ -67,6 +70,11 @@ internal sealed interface PrivilegedRuntime {
             return ShizukuHook.hookedConnectivityManager
         }
 
+        override fun windowManager(): IWindowManager {
+            Timber.tag(TAG).d("Getting IWindowManager in $name mode.")
+            return ShizukuHook.hookedWindowManager
+        }
+
         override fun appOpsBinder(): IBinder? {
             Timber.tag(TAG).d("Getting AppOps Binder in $name mode.")
             return ShizukuHook.hookedAppOpsBinder
@@ -101,6 +109,12 @@ internal sealed interface PrivilegedRuntime {
             Timber.tag(TAG).d("Getting IConnectivityManager in $name mode.")
             val original = ServiceManager.getService(Context.CONNECTIVITY_SERVICE)
             return IConnectivityManager.Stub.asInterface(binderWrapper(original))
+        }
+
+        override fun windowManager(): IWindowManager {
+            Timber.tag(TAG).d("Getting IWindowManager in $name mode.")
+            val original = ServiceManager.getService(Context.WINDOW_SERVICE)
+            return IWindowManager.Stub.asInterface(binderWrapper(original))
         }
 
         override fun appOpsBinder(): IBinder {

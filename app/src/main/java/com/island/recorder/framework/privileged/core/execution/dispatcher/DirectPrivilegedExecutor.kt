@@ -4,10 +4,12 @@ import com.island.recorder.framework.privileged.Authorizer
 import com.island.recorder.framework.privileged.core.execution.runtime.DefaultPrivilegedService
 import com.island.recorder.framework.privileged.core.execution.runtime.PrivilegedOperations
 import com.island.recorder.framework.privileged.core.infrastructure.process.AppProcessTerminal
+import com.island.recorder.framework.privileged.core.infrastructure.lifecycle.RecyclerManager
+import com.island.recorder.framework.privileged.core.infrastructure.lifecycle.PROCESS_HOOK_RECYCLER_MANAGER_QUALIFIER
 import com.island.recorder.framework.privileged.core.infrastructure.recycler.ProcessHookRecycler
 import com.island.recorder.framework.privileged.core.infrastructure.recycler.ShizukuHookRecycler
 import org.koin.core.context.GlobalContext
-import org.koin.core.parameter.parametersOf
+import org.koin.core.qualifier.named
 import timber.log.Timber
 
 private const val DIRECT_TAG = "DirectPrivileged"
@@ -21,7 +23,10 @@ fun <T> useDirectPrivileged(
     return when (authorizer) {
         Authorizer.Root -> {
             val terminal = special?.invoke() ?: AppProcessTerminal.Root
-            val handle = koin.get<ProcessHookRecycler> { parametersOf(terminal) }.make()
+            val recyclerManager = koin.get<
+                RecyclerManager<AppProcessTerminal, ProcessHookRecycler>
+                >(named(PROCESS_HOOK_RECYCLER_MANAGER_QUALIFIER))
+            val handle = recyclerManager.get(terminal).make()
             handle.use {
                 action(DefaultPrivilegedService.binderWrapped(name = terminal.runtimeName()) { binder ->
                     it.entity.binderWrapper(binder)

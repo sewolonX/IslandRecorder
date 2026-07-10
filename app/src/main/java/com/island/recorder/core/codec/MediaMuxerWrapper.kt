@@ -165,6 +165,7 @@ class MediaMuxerWrapper(
     }
 
     private var expectAudio = false
+    private var recordingStartTimeUs = -1L
     private var timestampOffsetUs = 0L
     private var pauseStartUs = 0L
     private var videoSampleWindowStartUs = -1L
@@ -203,6 +204,17 @@ class MediaMuxerWrapper(
     }
 
     /**
+     * MediaCodec surface input timestamps are based on the system monotonic clock.
+     * Normalize samples to the moment VirtualDisplay is attached so the MP4 does
+     * not preserve startup latency as an empty leading timeline segment.
+     */
+    fun setRecordingStartTimestampUs(timestampUs: Long) {
+        recordingStartTimeUs = timestampUs
+        timestampOffsetUs = 0L
+        pauseStartUs = 0L
+    }
+
+    /**
      * Start muxer when all tracks are added
      */
     private fun tryStartMuxer() {
@@ -236,7 +248,7 @@ class MediaMuxerWrapper(
             val adjusted = MediaCodec.BufferInfo()
             adjusted.set(
                 bufferInfo.offset, bufferInfo.size,
-                bufferInfo.presentationTimeUs - timestampOffsetUs, bufferInfo.flags
+                adjustedPresentationTimeUs(bufferInfo.presentationTimeUs), bufferInfo.flags
             )
             mediaMuxer?.writeSampleData(videoTrackIndex, buffer, adjusted)
             recordVideoSampleWrite(adjusted)
@@ -352,7 +364,7 @@ class MediaMuxerWrapper(
             val adjusted = MediaCodec.BufferInfo()
             adjusted.set(
                 bufferInfo.offset, bufferInfo.size,
-                bufferInfo.presentationTimeUs - timestampOffsetUs, bufferInfo.flags
+                adjustedPresentationTimeUs(bufferInfo.presentationTimeUs), bufferInfo.flags
             )
             mediaMuxer?.writeSampleData(audioTrackIndex, buffer, adjusted)
         } catch (e: Exception) {
@@ -389,5 +401,12 @@ class MediaMuxerWrapper(
      */
     fun isStarted(): Boolean {
         return isMuxerStarted
+    }
+
+    private fun adjustedPresentationTimeUs(sampleTimeUs: Long): Long {
+        if (recordingStartTimeUs < 0L) {
+            recordingStartTimeUs = sampleTimeUs
+        }
+        return (sampleTimeUs - recordingStartTimeUs - timestampOffsetUs).coerceAtLeast(0L)
     }
 }

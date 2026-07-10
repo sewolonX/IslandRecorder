@@ -1,5 +1,6 @@
 package com.island.recorder.framework.privileged.provider
 
+import android.app.AppOpsManager
 import android.content.Context
 import com.island.recorder.domain.settings.repository.AppSettingsRepository
 import com.island.recorder.framework.privileged.Authorizer
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 class PrivilegedOperationProvider(
     private val context: Context,
@@ -21,6 +23,11 @@ class PrivilegedOperationProvider(
     private val capabilityProvider: DeviceCapabilityProvider,
     private val appScope: CoroutineScope
 ) {
+    private companion object {
+        private const val TAG = "PrivilegedOperation"
+        private const val OPSTR_PROJECT_MEDIA = "android:project_media"
+    }
+
     private val _projectMediaAllowedFlow = MutableStateFlow(false)
     val projectMediaAllowedFlow: StateFlow<Boolean> = _projectMediaAllowedFlow.asStateFlow()
 
@@ -34,8 +41,24 @@ class PrivilegedOperationProvider(
         capabilityProvider.requestShizukuPermission(requestCode)
     }
 
-    fun setPackageNetworkingEnabled(uid: Int, enabled: Boolean): Boolean =
-        callPrivileged { it.setPackageNetworkingEnabled(uid, enabled) }
+    fun setPackageNetworkingEnabled(uid: Int, enabled: Boolean): Boolean {
+        val capability = capabilityProvider.current()
+        val authorizer = when (settingsRepository.currentPreferences.authorizer) {
+            Authorizer.Shizuku -> {
+                Authorizer.Shizuku.takeIf {
+                    capability.shizukuMode == ShizukuMode.Authorized
+                }
+            }
+
+            Authorizer.Root -> {
+                Authorizer.Root.takeIf { capability.rootMode != RootMode.None }
+            }
+        }
+        authorizer ?: return false
+        return runDirectPrivilegedOrNull(authorizer) {
+            it.setPackageNetworkingEnabled(uid, enabled)
+        } ?: false
+    }
 
     fun setShowTouches(enabled: Boolean): Boolean =
         callPrivileged { it.setShowTouches(enabled) }
@@ -56,8 +79,19 @@ class PrivilegedOperationProvider(
     fun isProjectMediaAllowed(
         packageName: String = context.packageName,
         uid: Int = context.applicationInfo.uid
-    ): Boolean =
-        callPrivileged { it.isProjectMediaAllowed(packageName, uid) }
+    ): Boolean {
+        return try {
+            val appOpsManager = context.getSystemService(AppOpsManager::class.java)
+            appOpsManager.checkOpNoThrow(
+                OPSTR_PROJECT_MEDIA,
+                uid,
+                packageName
+            ) == AppOpsManager.MODE_ALLOWED
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Failed to check PROJECT_MEDIA locally")
+            false
+        }
+    }
 
     fun refreshProjectMediaAllowed(
         packageName: String = context.packageName,
@@ -104,7 +138,14 @@ class PrivilegedOperationProvider(
     private fun callPrivileged(
         block: (PrivilegedOperations) -> Boolean
     ): Boolean {
-        val authorizer = activeAuthorizer() ?: return false
-        return runDirectPrivilegedOrNull(authorizer, action = block) ?: false
+        val authorizer = activeAuthorizer()
+        if (authorizer == null) {
+            Timber.tag(TAG).w("Privileged action skipped because no authorizer is available")
+            return false
+        }
+        Timber.tag(TAG).d("Running privileged action with authorizer=$authorizer")
+        val result = runDirectPrivilegedOrNull(authorizer, action = block) ?: false
+        Timber.tag(TAG).d("Privileged action completed with authorizer=$authorizer result=$result")
+        return result
     }
 }
