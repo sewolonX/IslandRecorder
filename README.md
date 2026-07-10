@@ -1,4 +1,4 @@
-# Island Recorder
+<h1 align="center">Island Recorder</h1>
 
 [![License: GPL v3 or later](https://img.shields.io/badge/License-GPLv3%2B-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Latest Release](https://img.shields.io/github/v/release/wxxsfxyzm/IslandRecoder?label=Release)](https://github.com/wxxsfxyzm/IslandRecoder/releases/latest)
@@ -27,18 +27,23 @@ This project is developed based on the following projects:
 - **Screen recording:** record the device screen through Android MediaProjection.
 - **Resolution options:** native, 1080p, 720p, 480p, and 360p.
 - **Frame-rate control:** auto mode and fixed limits from 15 FPS up to 120 FPS.
-- **Codec choices:** H.264, H.265, and H.265 HDR.
+- **Codec choices:** H.264, H.265, and H.265 HDR, with H.265 used as the default fallback.
 - **Audio sources:** no audio, internal audio, microphone, or both.
 - **Recording controls:** foreground notification, Quick Settings tile, and recording state handling
   for start, stop, pause, resume, and cleanup.
 - **Super Island controls:** recording status and controls are adapted for Xiaomi Super Island on
   supported systems.
+- **Floating controls and facecam:** optional overlay controls and a CameraX front-camera preview
+  remain available while recording.
 - **Miuix interface:** Compose UI built around Miuix components and Xiaomi/HyperOS-oriented visual
   conventions.
 - **Xiaomi-specific settings:** privileged settings integration for Xiaomi screen recording related
   behavior.
-- **SAF storage:** configurable recording output location through Android Storage Access Framework,
-  without requesting file or media access permissions.
+- **Scoped storage:** recordings use MediaStore under `DCIM/screenrecorder` by default, or a
+  user-selected directory through Android Storage Access Framework, without broad storage or media
+  permissions.
+- **Launcher icon control:** optionally hides the launcher icon; settings remain accessible by
+  long-pressing the Quick Settings tile.
 - **Privacy-first design:** no analytics, no telemetry, and no network reporting.
 
 ## Privileged Features
@@ -47,15 +52,16 @@ Island Recorder can work without privileged access for normal MediaProjection-ba
 advanced features require Root or Shizuku:
 
 - **Show screen touches:** temporarily enables Android touch visualization while recording.
-- **Xiaomi screen share protection control:** temporarily disables and restores Xiaomi screen share
-  protection around recordings when supported.
+- **Xiaomi screen share protection control:** an independent setting temporarily disables and
+  restores Xiaomi screen share protection around recordings when supported.
 - **Project media permission grant:** grants the app the system project media operation where
   supported, reducing repeated capture permission friction.
-- **Xiaomi Focus Island notification bypass:** optionally uses privileged behavior to improve
-  recording notification visibility on supported Xiaomi systems.
+- **Xiaomi Focus Island notification bypass:** an independent setting temporarily isolates XMSF
+  while posting recording notifications on supported Xiaomi systems.
 
 Privileged operations use binder hook paths through Shizuku or root `app_process`. Shizuku
-UserService/AIDL is not used.
+UserService/AIDL is not used. The selected authorizer is respected, and controls are disabled when
+that authorizer is unavailable.
 
 ## Supported Android Versions
 
@@ -133,7 +139,7 @@ For a broader debug build that also covers helper modules:
 The app uses the `level` flavor dimension:
 
 - **Unstable:** default development flavor with a git hash version suffix.
-- **Stable:** release-style version name.
+- **Stable:** release flavor with the same git hash version suffix.
 
 ## Technical Overview
 
@@ -153,7 +159,8 @@ Island Recorder is designed to keep recording data local.
 - No telemetry.
 - No tracking.
 - No remote reporting.
-- Recordings are saved on the user's device.
+- Recordings and settings stay on the user's device.
+- Files leave the device only through an explicit user share or export action.
 
 ## License
 
@@ -170,3 +177,4 @@ This project uses code from, or is based on the implementation of, the following
 - [IcradleInnovationsLtd/FluxRecorder](https://github.com/IcradleInnovationsLtd/FluxRecorder)
 - [RikkaApps/Shizuku](https://github.com/RikkaApps/Shizuku)
 - [compose-miuix-ui/miuix](https://github.com/compose-miuix-ui/miuix)
+- [iamr0s/AndroidAppProcess](https://github.com/iamr0s/AndroidAppProcess)
