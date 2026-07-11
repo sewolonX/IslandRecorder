@@ -100,15 +100,24 @@ class DefaultPrivilegedService private constructor(
 
     override fun isScreenShareProtectionEnabled(): Boolean {
         return try {
-            val protectionOn =
+            val userEnabled =
                 getSecureSettingWithHookedProvider(SETTING_SCREEN_SHARE_PROTECTION)
+            val runtimeEnabled =
+                getSecureSettingWithHookedProvider(SETTING_SCREEN_SHARE_PROTECTION_ON)
+
             Timber.tag(TAG).d(
                 "Read screen share protection via ${runtime.name}: " +
-                    "$SETTING_SCREEN_SHARE_PROTECTION=$protectionOn."
+                        "$SETTING_SCREEN_SHARE_PROTECTION=$userEnabled, " +
+                        "$SETTING_SCREEN_SHARE_PROTECTION_ON=$runtimeEnabled."
             )
-            protectionOn == SETTING_ENABLED
+
+            userEnabled == SETTING_ENABLED ||
+                    runtimeEnabled == SETTING_ENABLED
         } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "Failed to read screen share protection via ${runtime.name}")
+            Timber.tag(TAG).e(
+                e,
+                "Failed to read screen share protection via ${runtime.name}"
+            )
             false
         }
     }
@@ -122,8 +131,8 @@ class DefaultPrivilegedService private constructor(
                 getSecureSettingWithHookedProvider(SETTING_SCREEN_SHARE_PROTECTION_ON)
             Timber.tag(TAG).i(
                 "Updating screen share protection via ${runtime.name}: enabled=$enabled " +
-                    "before[$SETTING_SCREEN_SHARE_PROTECTION=$previousEnabled, " +
-                    "$SETTING_SCREEN_SHARE_PROTECTION_ON=$previousRuntimeEnabled]."
+                        "before[$SETTING_SCREEN_SHARE_PROTECTION=$previousEnabled, " +
+                        "$SETTING_SCREEN_SHARE_PROTECTION_ON=$previousRuntimeEnabled]."
             )
             putSecureSettingWithHookedProvider(
                 SETTING_SCREEN_SHARE_PROTECTION,
@@ -148,17 +157,17 @@ class DefaultPrivilegedService private constructor(
             val actualRuntimeEnabled = actualRuntimeValue == SETTING_ENABLED
             Timber.tag(TAG).i(
                 "Screen share protection update result via ${runtime.name}: " +
-                    "expected=$targetValue " +
-                    "after[$SETTING_SCREEN_SHARE_PROTECTION=$actualValue, " +
-                    "$SETTING_SCREEN_SHARE_PROTECTION_ON=$actualRuntimeValue] " +
-                    "windowBlacklistUpdated=$blacklistUpdated."
+                        "expected=$targetValue " +
+                        "after[$SETTING_SCREEN_SHARE_PROTECTION=$actualValue, " +
+                        "$SETTING_SCREEN_SHARE_PROTECTION_ON=$actualRuntimeValue] " +
+                        "windowBlacklistUpdated=$blacklistUpdated."
             )
             if (actualEnabled != enabled || actualRuntimeEnabled != enabled) {
                 Timber.tag(TAG).w(
                     "Screen share protection readback mismatch via ${runtime.name}: " +
-                        "expected=$enabled actual=$actualEnabled " +
-                        "runtimeActual=$actualRuntimeEnabled " +
-                        "windowBlacklistUpdated=$blacklistUpdated."
+                            "expected=$enabled actual=$actualEnabled " +
+                            "runtimeActual=$actualRuntimeEnabled " +
+                            "windowBlacklistUpdated=$blacklistUpdated."
                 )
                 return false
             }
