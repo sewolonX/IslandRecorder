@@ -16,6 +16,8 @@
     <string name="action_pause">Pause</string>
     <string name="action_resume">Resume</string>
     <string name="action_stop">Stop</string>
+    <string name="action_share">Share</string>
+    <string name="action_delete">Delete</string>
     <string name="action_record">RECORD</string>
     <string name="action_stop_caps">STOP</string>
     <string name="current_settings">Current Settings</string>
@@ -151,6 +153,11 @@
     <string name="notification_paused_title">Paused · %s</string>
     <string name="notification_paused_message">Tap to resume</string>
     <string name="notification_processing">Processing video…</string>
+    <string name="recording_saved_channel_name">Saved Recordings</string>
+    <string name="recording_saved_channel_desc">Shows completed screen recordings</string>
+    <string name="recording_saved_title">Screen record saved</string>
+    <string name="recording_saved_message">Tap here to see the recording</string>
+    <string name="recording_saved_share_chooser">Share recording</string>
 
     <!-- Floating Controls -->
     <string name="floating_pause">Pause</string>

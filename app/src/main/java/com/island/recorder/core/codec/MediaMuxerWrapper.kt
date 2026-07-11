@@ -177,7 +177,11 @@ class MediaMuxerWrapper(
     private var totalVideoBytesWritten = 0L
     private var totalVideoKeyFrames = 0L
     private var totalVideoCodecConfigSamples = 0L
+    private var totalVideoPtsCorrections = 0L
     private var totalVideoWriteFailures = 0L
+    private var lastAudioSamplePtsUs = -1L
+    private var totalAudioPtsCorrections = 0L
+    private var totalAudioWriteFailures = 0L
 
     /**
      * Mark the start of a pause — samples between pause and resume will be dropped
@@ -223,6 +227,7 @@ class MediaMuxerWrapper(
             mediaMuxer?.start()
             isMuxerStarted = true
             resetVideoSampleDiagnostics()
+            resetAudioSampleDiagnostics()
             Timber.tag(DIAGNOSTIC_MUXER_TAG).d(
                 "started videoTrack=$videoTrackIndex audioTrack=$audioTrackIndex " +
                     "expectAudio=$expectAudio displayName=$displayName"
@@ -245,10 +250,23 @@ class MediaMuxerWrapper(
         }
 
         try {
+            var presentationTimeUs = adjustedPresentationTimeUs(bufferInfo.presentationTimeUs)
+            if (lastVideoSamplePtsUs >= 0L && presentationTimeUs <= lastVideoSamplePtsUs) {
+                val correctedPresentationTimeUs = lastVideoSamplePtsUs + 1L
+                totalVideoPtsCorrections += 1
+                Timber.tag(DIAGNOSTIC_MUXER_TAG).w(
+                    "Correcting non-increasing video PTS: last=$lastVideoSamplePtsUs " +
+                        "current=$presentationTimeUs corrected=$correctedPresentationTimeUs " +
+                        "source=${bufferInfo.presentationTimeUs} offsetUs=$timestampOffsetUs " +
+                        "corrections=$totalVideoPtsCorrections"
+                )
+                presentationTimeUs = correctedPresentationTimeUs
+            }
+
             val adjusted = MediaCodec.BufferInfo()
             adjusted.set(
                 bufferInfo.offset, bufferInfo.size,
-                adjustedPresentationTimeUs(bufferInfo.presentationTimeUs), bufferInfo.flags
+                presentationTimeUs, bufferInfo.flags
             )
             mediaMuxer?.writeSampleData(videoTrackIndex, buffer, adjusted)
             recordVideoSampleWrite(adjusted)
@@ -273,7 +291,14 @@ class MediaMuxerWrapper(
         totalVideoBytesWritten = 0L
         totalVideoKeyFrames = 0L
         totalVideoCodecConfigSamples = 0L
+        totalVideoPtsCorrections = 0L
         totalVideoWriteFailures = 0L
+    }
+
+    private fun resetAudioSampleDiagnostics() {
+        lastAudioSamplePtsUs = -1L
+        totalAudioPtsCorrections = 0L
+        totalAudioWriteFailures = 0L
     }
 
     private fun recordVideoSampleWrite(bufferInfo: MediaCodec.BufferInfo) {
@@ -361,13 +386,28 @@ class MediaMuxerWrapper(
         }
 
         try {
+            var presentationTimeUs = adjustedPresentationTimeUs(bufferInfo.presentationTimeUs)
+            if (lastAudioSamplePtsUs >= 0L && presentationTimeUs <= lastAudioSamplePtsUs) {
+                val correctedPresentationTimeUs = lastAudioSamplePtsUs + 1L
+                totalAudioPtsCorrections += 1
+                Timber.tag(DIAGNOSTIC_MUXER_TAG).w(
+                    "Correcting non-increasing audio PTS: last=$lastAudioSamplePtsUs " +
+                        "current=$presentationTimeUs corrected=$correctedPresentationTimeUs " +
+                        "source=${bufferInfo.presentationTimeUs} offsetUs=$timestampOffsetUs " +
+                        "corrections=$totalAudioPtsCorrections"
+                )
+                presentationTimeUs = correctedPresentationTimeUs
+            }
+
             val adjusted = MediaCodec.BufferInfo()
             adjusted.set(
                 bufferInfo.offset, bufferInfo.size,
-                adjustedPresentationTimeUs(bufferInfo.presentationTimeUs), bufferInfo.flags
+                presentationTimeUs, bufferInfo.flags
             )
             mediaMuxer?.writeSampleData(audioTrackIndex, buffer, adjusted)
+            lastAudioSamplePtsUs = presentationTimeUs
         } catch (e: Exception) {
+            totalAudioWriteFailures += 1
             Timber.e(e, "Error writing audio sample")
         }
     }
@@ -388,7 +428,11 @@ class MediaMuxerWrapper(
             Timber.tag(DIAGNOSTIC_MUXER_TAG).d(
                 "released videoSamples=$totalVideoSamplesWritten videoBytes=$totalVideoBytesWritten " +
                     "keyFrames=$totalVideoKeyFrames codecConfig=$totalVideoCodecConfigSamples " +
-                    "failures=$totalVideoWriteFailures lastPtsUs=$lastVideoSamplePtsUs"
+                    "videoPtsCorrections=$totalVideoPtsCorrections " +
+                    "failures=$totalVideoWriteFailures lastPtsUs=$lastVideoSamplePtsUs " +
+                    "audioLastPtsUs=$lastAudioSamplePtsUs " +
+                    "audioPtsCorrections=$totalAudioPtsCorrections " +
+                    "audioFailures=$totalAudioWriteFailures"
             )
             Timber.d("MediaMuxer released")
         } catch (e: Exception) {

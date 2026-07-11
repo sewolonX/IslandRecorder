@@ -239,6 +239,17 @@ class VideoEncoder(
         updateColorSpace(if (isPq) HdrConfig.HDR_PQ else HdrConfig.HDR_HLG)
     }
 
+    fun requestSyncFrame() {
+        try {
+            val params = Bundle()
+            params.putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0)
+            mediaCodec?.setParameters(params)
+            Timber.d("Requested video sync frame")
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to request video sync frame")
+        }
+    }
+
     sealed interface EncoderOutput {
         data class Data(val buffer: ByteBuffer, val info: MediaCodec.BufferInfo, val index: Int) :
             EncoderOutput

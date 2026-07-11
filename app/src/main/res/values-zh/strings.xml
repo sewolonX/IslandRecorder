@@ -15,6 +15,8 @@
     <string name="action_pause">暂停</string>
     <string name="action_resume">继续</string>
     <string name="action_stop">停止</string>
+    <string name="action_share">分享</string>
+    <string name="action_delete">删除</string>
     <string name="action_record">录制</string>
     <string name="action_stop_caps">停止</string>
     <string name="current_settings">当前设置</string>
@@ -150,6 +152,11 @@
     <string name="notification_paused_title">已暂停 · %s</string>
     <string name="notification_paused_message">点击继续</string>
     <string name="notification_processing">正在处理视频…</string>
+    <string name="recording_saved_channel_name">已保存的录屏</string>
+    <string name="recording_saved_channel_desc">显示已完成的屏幕录制</string>
+    <string name="recording_saved_title">录屏已保存</string>
+    <string name="recording_saved_message">点按查看录屏</string>
+    <string name="recording_saved_share_chooser">分享录屏</string>
 
     <!-- Floating Controls -->
     <string name="floating_pause">暂停</string>

@@ -29,6 +29,7 @@ import com.island.recorder.domain.recording.model.RecordingState
 import com.island.recorder.domain.recording.model.ScreenOrientation
 import com.island.recorder.domain.recording.provider.RecordingStorageProvider
 import com.island.recorder.framework.notification.RecordingNotificationManager
+import com.island.recorder.framework.notification.RecordingSavedNotificationManager
 import com.island.recorder.framework.privileged.core.infrastructure.lifecycle.RecordingRootProcessSession
 import com.island.recorder.framework.privileged.provider.PrivilegedOperationProvider
 import kotlinx.coroutines.CancellationException
@@ -68,6 +69,9 @@ class RecorderService : Service() {
     private val recordingStorageProvider: RecordingStorageProvider by inject()
 
     private val recordingNotificationManager: RecordingNotificationManager by inject()
+    private val recordingSavedNotificationManager by lazy {
+        RecordingSavedNotificationManager(this)
+    }
     private val screenCaptureManager: ScreenCaptureManager by inject()
 
     private var videoEncoder: VideoEncoder? = null
@@ -434,6 +438,7 @@ class RecorderService : Service() {
                     }
                     return@launch
                 }
+                videoEncoder?.requestSyncFrame()
                 logStartupStep("virtualDisplay created")
 
                 // Start recording loop
@@ -474,6 +479,27 @@ class RecorderService : Service() {
 
     private suspend fun recordingLoop() {
         var videoTrackAdded = false
+        var waitingForFirstVideoKeyFrame = true
+        var lastSyncFrameRequestElapsedMs = 0L
+        var lastDurationUpdateElapsedMs = 0L
+
+        fun updateRecordingDuration(force: Boolean = false) {
+            val now = SystemClock.elapsedRealtime()
+            if (!force && now - lastDurationUpdateElapsedMs < 250L) return
+            if (_recordingState.value !is RecordingState.Recording) return
+
+            val currentDuration = System.currentTimeMillis() - startTime - pausedDuration
+            _recordingState.value = RecordingState.Recording(currentDuration)
+            lastDurationUpdateElapsedMs = now
+        }
+
+        fun requestSyncFrameThrottled() {
+            val now = SystemClock.elapsedRealtime()
+            if (now - lastSyncFrameRequestElapsedMs < 250L) return
+
+            videoEncoder?.requestSyncFrame()
+            lastSyncFrameRequestElapsedMs = now
+        }
 
         while (currentCoroutineContext().isActive) {
             val state = _recordingState.value
@@ -493,6 +519,7 @@ class RecorderService : Service() {
             try {
                 var drainedOutput = false
                 var outputAvailable = true
+                var outputsDrainedInBatch = 0
                 while (outputAvailable && currentCoroutineContext().isActive) {
                     val output = videoEncoder?.getEncodedData(timeoutUs = 0L)
                         ?: VideoEncoder.EncoderOutput.TryAgain
@@ -505,6 +532,7 @@ class RecorderService : Service() {
                             if (format != null && !videoTrackAdded) {
                                 muxer?.addVideoTrack(format)
                                 videoTrackAdded = true
+                                videoEncoder?.requestSyncFrame()
                                 Timber.d(
                                     "Video track added to muxer, HDR=${videoEncoder?.isHdrActive}"
                                 )
@@ -521,8 +549,19 @@ class RecorderService : Service() {
                             val (buffer, bufferInfo, bufferIndex) = output
 
                             if (videoTrackAdded && (bufferInfo.flags and android.media.MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
-                                recordVideoFpsSample(bufferInfo)
-                                muxer?.writeVideoSample(buffer, bufferInfo)
+                                val muxerStarted = muxer?.isStarted() == true
+                                val isKeyFrame =
+                                    (bufferInfo.flags and android.media.MediaCodec.BUFFER_FLAG_KEY_FRAME) != 0
+
+                                if (!muxerStarted) {
+                                    requestSyncFrameThrottled()
+                                } else if (waitingForFirstVideoKeyFrame && !isKeyFrame) {
+                                    requestSyncFrameThrottled()
+                                } else {
+                                    waitingForFirstVideoKeyFrame = false
+                                    recordVideoFpsSample(bufferInfo)
+                                    muxer?.writeVideoSample(buffer, bufferInfo)
+                                }
                             }
 
                             videoEncoder?.releaseOutputBuffer(bufferIndex)
@@ -532,11 +571,17 @@ class RecorderService : Service() {
                             outputAvailable = false
                         }
                     }
+
+                    if (drainedOutput) {
+                        updateRecordingDuration()
+                    }
+                    outputsDrainedInBatch += 1
+                    if (outputsDrainedInBatch >= 64) {
+                        outputAvailable = false
+                    }
                 }
 
-                // Update duration
-                val currentDuration = System.currentTimeMillis() - startTime - pausedDuration
-                _recordingState.value = RecordingState.Recording(currentDuration)
+                updateRecordingDuration(force = true)
 
                 if (drainedOutput) {
                     yield()
@@ -633,13 +678,57 @@ class RecorderService : Service() {
 
         Timber.d("Starting audio loop with buffer size: $bufferSize")
 
+        suspend fun drainAudioEncoderOutput(writeSamples: Boolean) {
+            var outputAvailable = true
+            while (outputAvailable && currentCoroutineContext().isActive) {
+                val output = audioEncoder?.getEncodedData() ?: AudioEncoder.Output.TryAgain
+
+                when (output) {
+                    is AudioEncoder.Output.Data -> {
+                        val canWriteSample =
+                            writeSamples && _recordingState.value is RecordingState.Recording
+                        if (canWriteSample && output.info.size > 0) {
+                            if (audioTrackAdded) {
+                                muxer?.writeAudioSample(output.buffer, output.info)
+                            } else {
+                                Timber.w(
+                                    "Audio data available but track not added yet"
+                                )
+                            }
+                        }
+                        audioEncoder?.releaseOutputBuffer(output.index)
+                    }
+
+                    is AudioEncoder.Output.FormatChanged -> {
+                        val format = audioEncoder?.getOutputFormat()
+                        if (format != null && !audioTrackAdded) {
+                            muxer?.addAudioTrack(format)
+                            audioTrackAdded = true
+                            val now = SystemClock.elapsedRealtime()
+                            Timber.tag(STARTUP_TIMING_TAG).d(
+                                "audio track added totalMs=${now - startupTraceStartElapsedMs} " +
+                                    "afterCaptureStartMs=${now - captureStartElapsedMs}"
+                            )
+                            Timber.d("?Audio track added to muxer")
+                        }
+                    }
+
+                    is AudioEncoder.Output.TryAgain -> {
+                        outputAvailable = false
+                    }
+                }
+            }
+        }
+
         while (currentCoroutineContext().isActive) {
             val state = _recordingState.value
             if (state !is RecordingState.Recording && state !is RecordingState.Paused) break
 
             if (state is RecordingState.Paused) {
-                // Drain audio buffer to prevent stale data on resume
+                // Drain recorder and encoder buffers to prevent stale samples from being written
+                // with the post-resume timestamp offset.
                 audioRecorder?.read(audioBuffer, bufferSize)
+                drainAudioEncoderOutput(writeSamples = false)
                 delay(10.milliseconds)
                 continue
             }
@@ -668,43 +757,7 @@ class RecorderService : Service() {
                     audioEncoder?.encode(audioBuffer, readResult, timestampUs)
 
                     // 3. Retrieve Encoded Data
-                    var outputAvailable = true
-                    while (outputAvailable) {
-                        val output = audioEncoder?.getEncodedData() ?: AudioEncoder.Output.TryAgain
-
-                        when (output) {
-                            is AudioEncoder.Output.Data -> {
-                                if (output.info.size > 0) {
-                                    if (audioTrackAdded) {
-                                        muxer?.writeAudioSample(output.buffer, output.info)
-                                    } else {
-                                        Timber.w(
-                                            "Audio data available but track not added yet"
-                                        )
-                                    }
-                                }
-                                audioEncoder?.releaseOutputBuffer(output.index)
-                            }
-
-                            is AudioEncoder.Output.FormatChanged -> {
-                                val format = audioEncoder?.getOutputFormat()
-                                if (format != null && !audioTrackAdded) {
-                                    muxer?.addAudioTrack(format)
-                                    audioTrackAdded = true
-                                    val now = SystemClock.elapsedRealtime()
-                                    Timber.tag(STARTUP_TIMING_TAG).d(
-                                        "audio track added totalMs=${now - startupTraceStartElapsedMs} " +
-                                            "afterCaptureStartMs=${now - captureStartElapsedMs}"
-                                    )
-                                    Timber.d("?Audio track added to muxer")
-                                }
-                            }
-
-                            is AudioEncoder.Output.TryAgain -> {
-                                outputAvailable = false
-                            }
-                        }
-                    }
+                    drainAudioEncoderOutput(writeSamples = true)
                 } else {
                     if (readCount == 0 && readResult == -1) {
                         Timber.e("Audio recorder returning -1 (no data)")
@@ -725,10 +778,10 @@ class RecorderService : Service() {
     private fun pauseRecording() {
         val currentState = _recordingState.value
         if (currentState is RecordingState.Recording) {
+            Timber.d("Pausing recording at duration=${currentState.durationMs}")
             pauseStartTime = System.currentTimeMillis()
-            screenCaptureManager.pause()
-            muxer?.onPause()
             _recordingState.value = RecordingState.Paused(currentState.durationMs)
+            muxer?.onPause()
             requestTileRefresh(this)
 
             val notification = recordingNotificationManager.createRecordingNotification(
@@ -740,19 +793,19 @@ class RecorderService : Service() {
                 notification,
                 bypass = currentSettings?.bypassFocusIsland ?: false
             )
+        } else {
+            Timber.d("Ignoring pause request in state=$currentState")
         }
     }
 
     private fun resumeRecording() {
         val currentState = _recordingState.value
         if (currentState is RecordingState.Paused) {
+            Timber.d("Resuming recording from duration=${currentState.durationMs}")
             pausedDuration += System.currentTimeMillis() - pauseStartTime
             muxer?.onResume()
-            val surface = videoEncoder?.inputSurface
-            if (surface != null) {
-                screenCaptureManager.resume(surface)
-            }
             _recordingState.value = RecordingState.Recording(currentState.durationMs)
+            videoEncoder?.requestSyncFrame()
             requestTileRefresh(this)
 
             val notification = recordingNotificationManager.createRecordingNotification(
@@ -763,6 +816,8 @@ class RecorderService : Service() {
                 notification,
                 bypass = currentSettings?.bypassFocusIsland ?: false
             )
+        } else {
+            Timber.d("Ignoring resume request in state=$currentState")
         }
     }
 
@@ -832,6 +887,11 @@ class RecorderService : Service() {
                     currentRecordingOutput?.fileDescriptor?.close()
                 } catch (e: Exception) {
                     Timber.e(e, "Error closing recording output")
+                }
+                if (currentRecordingOutput != null) {
+                    recordingSavedNotificationManager.showRecordingSavedNotification(
+                        currentRecordingOutput
+                    )
                 }
 
                 try {

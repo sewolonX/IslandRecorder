@@ -79,6 +79,11 @@
             android:enabled="true"
             android:exported="false" />
 
+        <receiver
+            android:name="com.island.recorder.framework.notification.RecordingSavedActionReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
         <!-- Quick Settings Tile -->
         <service
             android:name="com.island.recorder.framework.service.QuickTileService"
