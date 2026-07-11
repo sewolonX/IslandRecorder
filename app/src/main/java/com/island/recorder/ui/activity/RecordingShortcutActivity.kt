@@ -9,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -29,6 +30,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -209,8 +211,8 @@ class RecordingShortcutActivity : ComponentActivity() {
 
                 val dialogMaxWidth = if (isLandscape) {
                     (windowWidth - 48.dp)
-                        .coerceAtLeast(560.dp)
-                        .coerceAtMost(720.dp)
+                        .coerceAtLeast(520.dp)
+                        .coerceAtMost(640.dp)
                 } else {
                     DialogDefaults.MaxWidth
                 }
@@ -226,102 +228,114 @@ class RecordingShortcutActivity : ComponentActivity() {
                     maxWidth = dialogMaxWidth
                 ) {
                     if (isLandscape) {
-                        // Landscape: left(title+switches) | divider | right(buttons)
-                        Row(
+                        // Landscape: full-width title/summary, then options | divider | buttons.
+                        Column(
                             modifier = Modifier
-                                .height(IntrinsicSize.Min)
+                                .fillMaxWidth()
                                 .padding(vertical = DialogContentVerticalPadding)
                         ) {
-                            // Left: title + switches
-                            Column(
-                                modifier = Modifier.weight(1f),
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.dialog_record_title),
-                                    style = MiuixTheme.textStyles.title4,
-                                    color = MiuixTheme.colorScheme.onBackground,
-                                    fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.padding(horizontal = DialogContentHorizontalPadding)
-                                )
+                            Text(
+                                text = stringResource(R.string.dialog_record_title),
+                                style = MiuixTheme.textStyles.title4,
+                                color = MiuixTheme.colorScheme.onBackground,
+                                fontWeight = FontWeight.Medium,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = DialogContentHorizontalPadding)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = stringResource(R.string.dialog_record_summary),
+                                style = MiuixTheme.textStyles.body1,
+                                color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = DialogContentHorizontalPadding)
+                            )
+                            permissionWarning?.let {
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = stringResource(R.string.dialog_record_summary),
+                                    text = stringResource(it),
                                     style = MiuixTheme.textStyles.body1,
                                     color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                                    modifier = Modifier.padding(horizontal = DialogContentHorizontalPadding)
-                                )
-                                permissionWarning?.let {
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = stringResource(it),
-                                        style = MiuixTheme.textStyles.body1,
-                                        color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                                        modifier = Modifier.padding(horizontal = DialogContentHorizontalPadding)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(12.dp))
-                                RecordingAudioSourceSpinner(
-                                    settings = settings,
-                                    enabled = hasRecordAudioPermissionState,
-                                    onSelected = { source ->
-                                        scope.launch {
-                                            appSettingsRepo.putString(
-                                                StringSetting.AudioSource,
-                                                source.name
-                                            )
-                                        }
-                                    }
-                                )
-                                ShowTouchesSwitch(
-                                    settings = settings,
-                                    enabled = showTouchesEnabled,
-                                    onCheckedChange = {
-                                        scope.launch {
-                                            appSettingsRepo.putBoolean(
-                                                BooleanSetting.ShowTouches,
-                                                it
-                                            )
-                                        }
-                                    }
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = DialogContentHorizontalPadding)
                                 )
                             }
-
-                            // Divider
-                            VerticalDivider(
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Row(
                                 modifier = Modifier
-                                    .fillMaxHeight()
-                                    .padding(horizontal = 16.dp)
-                            )
-
-                            // Right: buttons stacked vertically
-                            Column(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
-                                    .padding(horizontal = DialogContentHorizontalPadding),
-                                verticalArrangement = Arrangement.spacedBy(
-                                    8.dp,
-                                    Alignment.CenterVertically
-                                )
+                                    .fillMaxWidth()
+                                    .height(IntrinsicSize.Min)
                             ) {
-                                TextButton(
-                                    text = stringResource(R.string.cancel),
-                                    onClick = {
-                                        showDialog = false
-                                        finish()
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
+                                // Left: options
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    RecordingAudioSourceSpinner(
+                                        settings = settings,
+                                        enabled = hasRecordAudioPermissionState,
+                                        onSelected = { source ->
+                                            scope.launch {
+                                                appSettingsRepo.putString(
+                                                    StringSetting.AudioSource,
+                                                    source.name
+                                                )
+                                            }
+                                        }
+                                    )
+                                    ShowTouchesSwitch(
+                                        settings = settings,
+                                        enabled = showTouchesEnabled,
+                                        onCheckedChange = {
+                                            scope.launch {
+                                                appSettingsRepo.putBoolean(
+                                                    BooleanSetting.ShowTouches,
+                                                    it
+                                                )
+                                            }
+                                        }
+                                    )
+                                }
+
+                                VerticalDivider(
+                                    modifier = Modifier.fillMaxHeight()
                                 )
-                                TextButton(
-                                    text = stringResource(R.string.dialog_record_start),
-                                    onClick = {
-                                        showDialog = false
-                                        startRecording()
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    enabled = canStart,
-                                    colors = ButtonDefaults.textButtonColorsPrimary()
-                                )
+
+                                // Right: buttons stacked vertically
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                        .padding(horizontal = DialogContentHorizontalPadding),
+                                    verticalArrangement = Arrangement.spacedBy(
+                                        8.dp,
+                                        Alignment.CenterVertically
+                                    )
+                                ) {
+                                    TextButton(
+                                        text = stringResource(R.string.cancel),
+                                        onClick = {
+                                            showDialog = false
+                                            finish()
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    TextButton(
+                                        text = stringResource(R.string.dialog_record_start),
+                                        onClick = {
+                                            showDialog = false
+                                            startRecording()
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        enabled = canStart,
+                                        colors = ButtonDefaults.textButtonColorsPrimary()
+                                    )
+                                }
                             }
                         }
                     } else {
@@ -334,14 +348,20 @@ class RecordingShortcutActivity : ComponentActivity() {
                                 style = MiuixTheme.textStyles.title4,
                                 color = MiuixTheme.colorScheme.onBackground,
                                 fontWeight = FontWeight.Medium,
-                                modifier = Modifier.padding(horizontal = DialogContentHorizontalPadding)
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = DialogContentHorizontalPadding)
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
                                 text = stringResource(R.string.dialog_record_summary),
                                 style = MiuixTheme.textStyles.body1,
                                 color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                                modifier = Modifier.padding(horizontal = DialogContentHorizontalPadding)
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = DialogContentHorizontalPadding)
                             )
                             permissionWarning?.let {
                                 Spacer(modifier = Modifier.height(8.dp))
@@ -349,7 +369,10 @@ class RecordingShortcutActivity : ComponentActivity() {
                                     text = stringResource(it),
                                     style = MiuixTheme.textStyles.body1,
                                     color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                                    modifier = Modifier.padding(horizontal = DialogContentHorizontalPadding)
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = DialogContentHorizontalPadding)
                                 )
                             }
                             Spacer(modifier = Modifier.height(12.dp))
@@ -447,6 +470,7 @@ private fun ShowTouchesSwitch(
         title = stringResource(R.string.show_touches),
         summary = if (!enabled) stringResource(R.string.permission_privilege) else null,
         checked = settings.showTouches,
+        insideMargin = ShortcutPreferenceInsideMargin,
         enabled = enabled,
         onCheckedChange = onCheckedChange
     )
@@ -465,7 +489,13 @@ private fun RecordingAudioSourceSpinner(
             DropdownItem(text = stringResource(it.labelResId))
         },
         selectedIndex = AudioSource.entries.indexOf(settings.audioSource),
+        insideMargin = ShortcutPreferenceInsideMargin,
         enabled = enabled,
         onSelectedIndexChange = { onSelected(AudioSource.entries[it]) }
     )
 }
+
+private val ShortcutPreferenceInsideMargin = PaddingValues(
+    horizontal = 24.dp,
+    vertical = 16.dp
+)
