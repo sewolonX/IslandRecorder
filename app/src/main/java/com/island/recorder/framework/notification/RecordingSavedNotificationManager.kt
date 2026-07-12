@@ -14,6 +14,7 @@ import android.media.MediaMetadataRetriever
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
+import android.provider.MediaStore
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.island.recorder.R
@@ -105,12 +106,23 @@ class RecordingSavedNotificationManager(
     }
 
     private fun openPendingIntent(output: RecordingOutput): PendingIntent {
-        val intent = Intent(ACTION_REVIEW).apply {
-            setPackage(PACKAGE_MIUI_GALLERY)
-            setDataAndType(output.uri, MIME_TYPE_MP4)
+        val galleryUri = if (output.isDocumentUri) {
+            runCatching { MediaStore.getMediaUri(context, output.uri) }
+                .onFailure { Timber.w(it, "Failed to resolve MediaStore URI for ${output.uri}") }
+                .getOrNull()
+        } else {
+            output.uri
+        }
+        val action = if (galleryUri != null) ACTION_REVIEW else Intent.ACTION_VIEW
+        val intent = Intent(action).apply {
+            if (galleryUri != null) {
+                setPackage(PACKAGE_MIUI_GALLERY)
+            }
+            val openUri = galleryUri ?: output.uri
+            setDataAndType(openUri, MIME_TYPE_MP4)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
             if (output.isDocumentUri) {
-                clipData = ClipData.newUri(context.contentResolver, output.displayName, output.uri)
+                clipData = ClipData.newUri(context.contentResolver, output.displayName, openUri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
         }
