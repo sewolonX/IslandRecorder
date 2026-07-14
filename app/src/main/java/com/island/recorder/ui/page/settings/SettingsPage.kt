@@ -57,7 +57,6 @@ import com.island.recorder.framework.launcher.LauncherIconManager
 import com.island.recorder.framework.privileged.RootMode
 import com.island.recorder.framework.privileged.ShizukuMode
 import com.island.recorder.framework.storage.SafRecordingStorageProviderImpl
-import com.island.recorder.ui.components.MiuixBackButton
 import com.island.recorder.ui.theme.getMiuixAppBarColor
 import com.island.recorder.ui.theme.recorderMiuixBlurEffect
 import com.island.recorder.ui.theme.rememberMiuixBlurBackdrop
@@ -82,8 +81,7 @@ import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
 @Composable
 fun SettingsPage(
-    viewModel: SettingsViewModel = koinViewModel(),
-    onBack: () -> Unit
+    viewModel: SettingsViewModel = koinViewModel()
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
@@ -159,9 +157,6 @@ fun SettingsPage(
                 modifier = Modifier.recorderMiuixBlurEffect(backdrop),
                 color = backdrop.getMiuixAppBarColor(),
                 title = stringResource(R.string.settings),
-                navigationIcon = {
-                    MiuixBackButton(onClick = onBack)
-                },
                 scrollBehavior = scrollBehavior
             )
         }

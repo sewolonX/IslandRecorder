@@ -6,29 +6,14 @@
     <string name="tile_start_recording">Start Recording</string>
     <string name="tile_stop_recording">Stop Recording</string>
 
-    <!-- Home Screen -->
-    <string name="home_title" translatable="false">Island Recorder</string>
-    <string name="status_ready">Ready to Record</string>
-    <string name="status_recording">Recording</string>
-    <string name="status_paused">Paused</string>
-    <string name="status_processing">Processing…</string>
-    <string name="status_error">Error</string>
+    <!-- Recording Actions -->
     <string name="action_pause">Pause</string>
     <string name="action_resume">Resume</string>
     <string name="action_stop">Stop</string>
     <string name="action_share">Share</string>
     <string name="action_delete">Delete</string>
-    <string name="action_record">RECORD</string>
-    <string name="action_stop_caps">STOP</string>
-    <string name="current_settings">Current Settings</string>
-    <string name="label_quality">Resolution</string>
-    <string name="label_bitrate">Bitrate</string>
-    <string name="label_orientation">Orientation</string>
-    <string name="label_frame_rate">Max Frame Rate</string>
-    <string name="label_audio">Audio</string>
 
     <!-- Content Descriptions -->
-    <string name="cd_settings">Settings</string>
     <string name="cd_back">Back</string>
 
     <!-- Settings -->
@@ -45,9 +30,7 @@
     <string name="theme_settings_theme_mode_system">Follow System</string>
     <string name="authorization_status">Authorization Status</string>
     <string name="authorization_status_active">Privileged Access Active</string>
-    <string name="authorization_status_active_desc">Root or Shizuku operations are available</string>
     <string name="authorization_status_inactive">Privileged Access Inactive</string>
-    <string name="authorization_status_inactive_desc">Tap to choose or authorize Root/Shizuku</string>
     <string name="authorization_method">Authorization Method</string>
     <string name="authorization_method_root">Root</string>
     <string name="authorization_method_shizuku">Shizuku</string>

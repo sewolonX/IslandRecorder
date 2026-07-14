@@ -62,24 +62,30 @@ class QuickTileService : TileService() {
 
         val state = RecorderService.recordingState.value
 
-        if (state is RecordingState.Recording || state is RecordingState.Paused) {
-            Timber.d("Quick tile clicked - stopping recording")
-            val intent = Intent(this, RecorderService::class.java).apply {
-                action = RecorderService.ACTION_STOP_RECORDING
+        when (state) {
+            is RecordingState.Recording, is RecordingState.Paused -> {
+                Timber.d("Quick tile clicked - stopping recording")
+                val intent = Intent(this, RecorderService::class.java).apply {
+                    action = RecorderService.ACTION_STOP_RECORDING
+                }
+                startService(intent)
             }
-            startService(intent)
-        } else if (state is RecordingState.Stopping) {
-            Timber.d("Quick tile clicked while recording cleanup is in progress")
-        } else {
-            Timber.d("Quick tile clicked - launching shortcut for recording")
-            val intent = Intent(this, RecordingShortcutActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+
+            is RecordingState.Stopping -> {
+                Timber.d("Quick tile clicked while recording cleanup is in progress")
             }
-            val pendingIntent = PendingIntent.getActivity(
-                this, 0, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            startActivityAndCollapse(pendingIntent)
+
+            else -> {
+                Timber.d("Quick tile clicked - launching shortcut for recording")
+                val intent = Intent(this, RecordingShortcutActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                val pendingIntent = PendingIntent.getActivity(
+                    this, 0, intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                startActivityAndCollapse(pendingIntent)
+            }
         }
     }
 
@@ -101,8 +107,8 @@ class QuickTileService : TileService() {
 
     private fun RecordingState.isRecordingTileState(): Boolean =
         this is RecordingState.Recording ||
-            this is RecordingState.Paused ||
-            this is RecordingState.Stopping
+                this is RecordingState.Paused ||
+                this is RecordingState.Stopping
 
     private data class TileSnapshot(
         val isRecording: Boolean,

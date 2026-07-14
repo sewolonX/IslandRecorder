@@ -6,28 +6,14 @@
     <string name="tile_start_recording">开始录制</string>
     <string name="tile_stop_recording">停止录制</string>
 
-    <!-- Home Screen -->
-    <string name="status_ready">准备录制</string>
-    <string name="status_recording">录制中</string>
-    <string name="status_paused">已暂停</string>
-    <string name="status_processing">处理中…</string>
-    <string name="status_error">错误</string>
+    <!-- Recording Actions -->
     <string name="action_pause">暂停</string>
     <string name="action_resume">继续</string>
     <string name="action_stop">停止</string>
     <string name="action_share">分享</string>
     <string name="action_delete">删除</string>
-    <string name="action_record">录制</string>
-    <string name="action_stop_caps">停止</string>
-    <string name="current_settings">当前设置</string>
-    <string name="label_quality">分辨率</string>
-    <string name="label_bitrate">画质</string>
-    <string name="label_orientation">方向</string>
-    <string name="label_frame_rate">最高帧率</string>
-    <string name="label_audio">音频</string>
 
     <!-- Content Descriptions -->
-    <string name="cd_settings">设置</string>
     <string name="cd_back">返回</string>
 
     <!-- Settings -->
@@ -44,9 +30,7 @@
     <string name="theme_settings_theme_mode_system">跟随系统</string>
     <string name="authorization_status">授权状态</string>
     <string name="authorization_status_active">特权访问已激活</string>
-    <string name="authorization_status_active_desc">Root 或 Shizuku 操作可用</string>
     <string name="authorization_status_inactive">特权访问未激活</string>
-    <string name="authorization_status_inactive_desc">点击选择或授权 Root/Shizuku</string>
     <string name="authorization_method">授权方式</string>
     <string name="authorization_method_root">Root</string>
     <string name="authorization_method_shizuku">Shizuku</string>
