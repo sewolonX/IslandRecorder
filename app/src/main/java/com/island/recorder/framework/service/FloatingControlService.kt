@@ -11,23 +11,20 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.ImageButton
 import android.widget.LinearLayout
-import com.island.recorder.core.camera.CameraOverlay
 import timber.log.Timber
 import kotlin.math.abs
 
 /**
- * Service for floating control overlay with pause/stop/camera controls
+ * Service for the floating recording control overlay.
  */
 class FloatingControlService : Service() {
 
-    private var cameraOverlay: CameraOverlay? = null
     private var controlOverlay: View? = null
     private val windowManager by lazy { getSystemService(WINDOW_SERVICE) as WindowManager }
 
     override fun onCreate() {
         super.onCreate()
         Timber.d("FloatingControlService created")
-        cameraOverlay = CameraOverlay(this)
         createControlOverlay()
     }
 
@@ -128,7 +125,6 @@ class FloatingControlService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Timber.d("FloatingControlService started")
-        cameraOverlay?.show()
         return START_NOT_STICKY
     }
 
@@ -139,9 +135,6 @@ class FloatingControlService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         Timber.d("FloatingControlService destroyed")
-
-        cameraOverlay?.stop()
-        cameraOverlay = null
 
         controlOverlay?.let { windowManager.removeView(it) }
         controlOverlay = null

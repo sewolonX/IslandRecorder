@@ -132,8 +132,6 @@ dependencies {
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.graphics)
     implementation(libs.compose.ui.tooling.preview)
-    implementation(libs.compose.material3)
-    implementation(libs.compose.materialIcons)
 
     // Miuix UI
     implementation(libs.miuix.core)
@@ -157,23 +155,6 @@ dependencies {
     implementation(libs.androidx.navigationevent) {
         exclude(group = "androidx.navigation", module = "navigationevent-compose")
     }
-
-    // CameraX for Facecam
-    implementation(libs.androidx.camera.core)
-    implementation(libs.androidx.camera.camera2)
-    implementation(libs.androidx.camera.lifecycle)
-    implementation(libs.androidx.camera.view)
-
-    // ExoPlayer for Video Playback
-    implementation(libs.androidx.media3.exoplayer)
-    implementation(libs.androidx.media3.ui)
-
-    // Accompanist for Permissions
-    implementation(libs.accompanist.permissions)
-
-    // Coil for Image/Video Thumbnails
-    implementation(libs.coil.compose)
-    implementation(libs.coil.video)
 
     // Shizuku
     implementation(libs.rikka.shizuku.api)

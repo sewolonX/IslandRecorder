@@ -33,8 +33,7 @@ This project is developed based on the following projects:
   for start, stop, pause, resume, and cleanup.
 - **Super Island controls:** recording status and controls are adapted for Xiaomi Super Island on
   supported systems.
-- **Floating controls and facecam:** optional overlay controls and a CameraX front-camera preview
-  remain available while recording.
+- **Floating controls:** optional overlay controls remain available while recording.
 - **Miuix interface:** Compose UI built around Miuix components and Xiaomi/HyperOS-oriented visual
   conventions.
 - **Xiaomi-specific settings:** privileged settings integration for Xiaomi screen recording related

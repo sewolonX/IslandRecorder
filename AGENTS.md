@@ -45,7 +45,6 @@ Xiaomi/HyperOS devices, with Super Island-oriented controls. It is built around:
 * DataStore-backed app settings.
 * MediaProjection, MediaCodec, MediaMuxer, and AudioRecord/MediaRecorder based
   recording.
-* CameraX-based floating facecam preview.
 * SAF/MediaStore recording output.
 * Navigation3 screen navigation.
 * Quick Settings tile and notification controls.
@@ -77,7 +76,7 @@ Do not assume any other top-level directory is an included module.
 Under `app/src/main/java/com/island/recorder/`:
 
 * `core/` — low-level recording primitives such as audio capture, codecs,
-  muxing, projection, CameraX overlay, and reflection helpers.
+  muxing, projection, and reflection helpers.
 * `data/` — concrete persistence and repository implementations, including
   DataStore-backed settings.
 * `di/` — Koin modules and dependency wiring.
@@ -217,15 +216,13 @@ tile. Keep it focused:
 
 ---
 
-## Floating controls and camera overlay
+## Floating controls
 
-`FloatingControlService` owns the application overlay controls and currently
-starts `CameraOverlay` for the floating front-camera preview.
+`FloatingControlService` owns the application overlay controls.
 
 * Keep overlay work behind the `SYSTEM_ALERT_WINDOW` permission path.
-* Keep CameraX lifecycle ownership and cleanup explicit; release camera and
-  window views when the service or overlay closes.
-* Do not move overlay or CameraX implementation details into domain models.
+* Keep window-view ownership and cleanup explicit when the service closes.
+* Do not move overlay implementation details into domain models.
 * Prefer app drawable/string resources over framework placeholder icons/text
   when changing user-visible controls.
 
