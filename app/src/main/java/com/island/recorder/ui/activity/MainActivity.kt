@@ -17,7 +17,7 @@ import com.island.recorder.domain.device.provider.PermissionChecker
 import com.island.recorder.domain.settings.model.AppPreferences
 import com.island.recorder.domain.settings.repository.AppSettingsRepository
 import com.island.recorder.ui.common.permission.PermissionRequester
-import com.island.recorder.ui.navigation.MiuixNavContainer
+import com.island.recorder.ui.page.settings.SettingsPage
 import com.island.recorder.ui.theme.IslandRecorderTheme
 import com.island.recorder.ui.theme.LocalWindowLayoutInfo
 import com.island.recorder.ui.theme.rememberWindowLayoutInfo
@@ -64,7 +64,7 @@ class MainActivity : ComponentActivity(), KoinComponent {
                             .fillMaxSize()
                             .background(MiuixTheme.colorScheme.surface)
                     ) {
-                        MiuixNavContainer()
+                        SettingsPage()
                     }
                 }
             }

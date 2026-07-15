@@ -3,7 +3,6 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.island.application)
     alias(libs.plugins.ksp)
-    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.compose.compiler)
     id("kotlin-parcelize")
 }
@@ -140,7 +139,6 @@ dependencies {
     implementation(libs.miuix.blur)
     implementation(libs.miuix.preference)
     implementation(libs.miuix.icons)
-    implementation(libs.miuix.navigation)
 
     // Koin Dependency Injection
     implementation(platform(libs.koin.bom))
@@ -148,13 +146,6 @@ dependencies {
     implementation(libs.koin.android)
     implementation(libs.koin.compose)
     implementation(libs.koin.compose.viewmodel)
-
-    // Navigation3
-    implementation(libs.androidx.lifecycle.viewmodel.navigation3)
-    implementation(libs.androidx.navigation3.runtime)
-    implementation(libs.androidx.navigationevent) {
-        exclude(group = "androidx.navigation", module = "navigationevent-compose")
-    }
 
     // Shizuku
     implementation(libs.rikka.shizuku.api)
@@ -168,14 +159,10 @@ dependencies {
     // HiddenApiBypass
     implementation(libs.hiddenapibypass)
 
-    // Serialization
-    implementation(libs.ktx.serializationJson)
-
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.compose.ui.test.junit4)
 
     // Debug
