@@ -17,7 +17,7 @@ espressoCore = "3.7.0"
 [plugins]
 island-application = { id = "island.android.application" }
 island-library = { id = "island.android.library" }
-island-test = { id = "island.android.test" }
+
 agp-lib = { id = "com.android.library", version.ref = "agp" }
 agp-app = { id = "com.android.application", version.ref = "agp" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
@@ -53,6 +53,7 @@ koin-compose-viewmodel = { group = "io.insert-koin", name = "koin-compose-viewmo
 rikka-shizuku-api = { group = "dev.rikka.shizuku", name = "api", version.ref = "rikka-shizuku" }
 rikka-shizuku-provider = { group = "dev.rikka.shizuku", name = "provider", version.ref = "rikka-shizuku" }
 
+
 timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "timber" }
 
 miuix-core = { group = "top.yukonga.miuix.kmp", name = "miuix-core-android", version.ref = "miuix" }
@@ -61,6 +62,7 @@ miuix-shader = { group = "top.yukonga.miuix.kmp", name = "miuix-shader-android",
 miuix-blur = { group = "top.yukonga.miuix.kmp", name = "miuix-blur-android", version.ref = "miuix" }
 miuix-preference = { group = "top.yukonga.miuix.kmp", name = "miuix-preference-android", version.ref = "miuix" }
 miuix-icons = { group = "top.yukonga.miuix.kmp", name = "miuix-icons-android", version.ref = "miuix" }
+
 
 junit = { group = "junit", name = "junit", version = "4.13.2" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junit" }

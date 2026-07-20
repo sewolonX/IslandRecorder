@@ -14,7 +14,6 @@ import com.island.recorder.R
 import com.island.recorder.domain.recording.model.TileStyle
 import com.island.recorder.framework.privileged.provider.PrivilegedOperationProvider
 import com.island.recorder.framework.service.RecorderService
-import com.island.recorder.ui.activity.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -29,7 +28,6 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import timber.log.Timber
-import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
 
 class RecordingNotificationManager(
@@ -62,7 +60,7 @@ class RecordingNotificationManager(
         private const val SUPER_ISLAND_BLOCKING_INTERVAL_MS = 125
         private const val ACTION_PAUSE_RESUME_REQUEST_CODE = 1
         private const val ACTION_STOP_REQUEST_CODE = 2
-        private const val CONTENT_REQUEST_CODE = 3
+        private const val TICKER_ICON_KEY = "miui.focus.pic_ticker"
     }
 
     init {
@@ -75,15 +73,13 @@ class RecordingNotificationManager(
         isPaused: Boolean = false,
         bypass: Boolean = false
     ): Notification {
-        val formattedDuration = formatDuration(durationMs)
         val payload = RecordingNotificationPayload(
             durationMs = durationMs,
             isPaused = isPaused,
             tileStyle = tileStyle,
             title = context.getString(
-                if (isPaused) R.string.notification_paused_title else R.string.notification_recording_title,
-                formattedDuration
-            ),
+                if (isPaused) R.string.notification_paused_title else R.string.notification_recording_title
+            ) + "\u00A0",
             contentText = context.getString(
                 if (isPaused) R.string.notification_paused_message else R.string.notification_recording_message
             ),
@@ -165,9 +161,9 @@ class RecordingNotificationManager(
     ): Notification {
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle(payload.title)
-            .setSmallIcon(R.drawable.ic_record)
-            .setContentIntent(actions.content)
+            .setSmallIcon(R.drawable.ic_focus_ticker)
             .setOngoing(true)
+            .setRequestPromotedOngoing(true)
             .setOnlyAlertOnce(true)
             .setWhen(payload.timerWhen)
             .setShowWhen(true)
@@ -187,16 +183,6 @@ class RecordingNotificationManager(
     }
 
     private fun createActions(payload: RecordingNotificationPayload): RecordingNotificationActions {
-        val contentIntent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        }
-        val contentPendingIntent = PendingIntent.getActivity(
-            context,
-            CONTENT_REQUEST_CODE,
-            contentIntent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
         val pauseResumeAction = if (payload.isPaused) {
             RecorderService.ACTION_RESUME_RECORDING
         } else {
@@ -219,7 +205,6 @@ class RecordingNotificationManager(
         )
 
         return RecordingNotificationActions(
-            content = contentPendingIntent,
             pauseResume = pauseResumePendingIntent,
             stop = stopPendingIntent,
             pauseResumeTitle = context.getString(
@@ -238,7 +223,6 @@ class RecordingNotificationManager(
             put("timerType", if (payload.isPaused) 2 else 1)
             put("timerSystemCurrent", payload.now)
         }
-        val tickerIconKey = "miui.focus.pic_ticker"
         val pauseIconKey = if (payload.isPaused) {
             "miui.focus.pic_resume"
         } else {
@@ -265,12 +249,12 @@ class RecordingNotificationManager(
                     put("notifyId", "${context.packageName}$NOTIFICATION_ID")
                     put("islandFirstFloat", false)
                     put("ticker", payload.contentText)
-                    put("tickerPic", tickerIconKey)
-                    put("tickerPicDark", tickerIconKey)
-                    put("param_island", buildSuperIslandArea(timerInfo, tickerIconKey))
+                    put("tickerPic", TICKER_ICON_KEY)
+                    put("tickerPicDark", TICKER_ICON_KEY)
+                    put("param_island", buildSuperIslandArea(timerInfo))
                     put(
                         "animTextInfo",
-                        buildSuperIslandTimerAnimation(timerInfo, tickerIconKey, payload)
+                        buildSuperIslandTimerAnimation(timerInfo, payload)
                     )
                     put(
                         "actions",
@@ -291,6 +275,8 @@ class RecordingNotificationManager(
                                     put("type", 0)
                                     put("actionIcon", stopIconKey)
                                     put("actionIconDark", stopIconDarkKey)
+                                    put("actionTextColor", "#FB382F")
+                                    put("actionTextColorDark", "#FB382F")
                                 }
                             )
                         }
@@ -306,7 +292,7 @@ class RecordingNotificationManager(
         }
     }
 
-    private fun buildSuperIslandArea(timerInfo: JSONObject, tickerIconKey: String): JSONObject =
+    private fun buildSuperIslandArea(timerInfo: JSONObject): JSONObject =
         JSONObject().apply {
             put("islandPriority", 1)
             put("islandTimeout", 43200)
@@ -323,7 +309,7 @@ class RecordingNotificationManager(
                                 "picInfo",
                                 JSONObject().apply {
                                     put("type", 1)
-                                    put("pic", tickerIconKey)
+                                    put("pic", TICKER_ICON_KEY)
                                 }
                             )
                         }
@@ -343,7 +329,7 @@ class RecordingNotificationManager(
                         "picInfo",
                         JSONObject().apply {
                             put("type", 1)
-                            put("pic", tickerIconKey)
+                            put("pic", TICKER_ICON_KEY)
                         }
                     )
                 }
@@ -352,7 +338,6 @@ class RecordingNotificationManager(
 
     private fun buildSuperIslandTimerAnimation(
         timerInfo: JSONObject,
-        tickerIconKey: String,
         payload: RecordingNotificationPayload
     ): JSONObject =
         JSONObject().apply {
@@ -371,7 +356,7 @@ class RecordingNotificationManager(
                 "picInfo",
                 JSONObject().apply {
                     put("type", 1)
-                    put("pic", tickerIconKey)
+                    put("pic", TICKER_ICON_KEY)
                 }
             )
         }
@@ -483,18 +468,6 @@ class RecordingNotificationManager(
         }
     }
 
-    private fun formatDuration(ms: Long): String {
-        val totalSeconds = ms / 1000
-        val hours = totalSeconds / 3600
-        val minutes = (totalSeconds % 3600) / 60
-        val seconds = totalSeconds % 60
-        return if (hours > 0) {
-            String.format(Locale.ROOT, "%02d:%02d:%02d", hours, minutes, seconds)
-        } else {
-            String.format(Locale.ROOT, "%02d:%02d", minutes, seconds)
-        }
-    }
-
     private data class RecordingNotificationPayload(
         val durationMs: Long,
         val isPaused: Boolean,
@@ -508,7 +481,6 @@ class RecordingNotificationManager(
     }
 
     private data class RecordingNotificationActions(
-        val content: PendingIntent,
         val pauseResume: PendingIntent,
         val stop: PendingIntent,
         val pauseResumeTitle: String,

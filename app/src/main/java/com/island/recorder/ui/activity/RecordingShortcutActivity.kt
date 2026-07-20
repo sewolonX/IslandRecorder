@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -225,7 +226,7 @@ class RecordingShortcutActivity : ComponentActivity() {
                     },
                     title = null,
                     insideMargin = DpSize.Zero,
-                    maxWidth = dialogMaxWidth
+                    modifier = Modifier.widthIn(max = dialogMaxWidth)
                 ) {
                     if (isLandscape) {
                         // Landscape: full-width title/summary, then options | divider | buttons.

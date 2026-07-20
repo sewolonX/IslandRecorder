@@ -13,8 +13,8 @@ import android.media.AudioAttributes
 import android.media.MediaMetadataRetriever
 import android.media.RingtoneManager
 import android.net.Uri
-import android.os.Build
 import android.provider.MediaStore
+import androidx.core.graphics.scale
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.island.recorder.R
@@ -61,12 +61,12 @@ class RecordingSavedNotificationManager(
             .addAction(
                 0,
                 context.getString(R.string.action_share),
-                sharePendingIntent(output.uri, notificationId)
+                sharePendingIntent(output.uri)
             )
             .addAction(
                 0,
                 context.getString(R.string.action_delete),
-                deletePendingIntent(output, notificationId)
+                deletePendingIntent(output)
             )
 
         if (thumbnail != null) {
@@ -113,12 +113,8 @@ class RecordingSavedNotificationManager(
         } else {
             output.uri
         }
-        val action = if (galleryUri != null) ACTION_REVIEW else Intent.ACTION_VIEW
-        val intent = Intent(action).apply {
-            if (galleryUri != null) {
-                setPackage(PACKAGE_MIUI_GALLERY)
-            }
-            val openUri = galleryUri ?: output.uri
+        val openUri = galleryUri ?: output.uri
+        val baseIntent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(openUri, MIME_TYPE_MP4)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
             if (output.isDocumentUri) {
@@ -126,15 +122,16 @@ class RecordingSavedNotificationManager(
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
         }
+        val viewIntent = Intent.createChooser(baseIntent, null)
         return PendingIntent.getActivity(
             context,
             OPEN_REQUEST_CODE,
-            intent,
+            viewIntent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
     }
 
-    private fun sharePendingIntent(uri: Uri, notificationId: Int): PendingIntent {
+    private fun sharePendingIntent(uri: Uri): PendingIntent {
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
             type = MIME_TYPE_MP4
             putExtra(Intent.EXTRA_STREAM, uri)
@@ -149,26 +146,25 @@ class RecordingSavedNotificationManager(
 
         return PendingIntent.getActivity(
             context,
-            notificationId + SHARE_REQUEST_OFFSET,
+            SAVED_NOTIFICATION_ID + SHARE_REQUEST_OFFSET,
             chooser,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
     }
 
     private fun deletePendingIntent(
-        output: RecordingOutput,
-        notificationId: Int
+        output: RecordingOutput
     ): PendingIntent {
         val intent = Intent(context, RecordingSavedActionReceiver::class.java).apply {
             action = ACTION_DELETE_RECORDING
             putExtra(EXTRA_URI, output.uri.toString())
             putExtra(EXTRA_IS_DOCUMENT_URI, output.isDocumentUri)
-            putExtra(EXTRA_NOTIFICATION_ID, notificationId)
+            putExtra(EXTRA_NOTIFICATION_ID, SAVED_NOTIFICATION_ID)
         }
 
         return PendingIntent.getBroadcast(
             context,
-            notificationId + DELETE_REQUEST_OFFSET,
+            SAVED_NOTIFICATION_ID + DELETE_REQUEST_OFFSET,
             intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
@@ -200,10 +196,7 @@ class RecordingSavedNotificationManager(
         val sourceWidth = if (rotated) height else width
         val sourceHeight = if (rotated) width else height
 
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1 &&
-            sourceWidth > 0 &&
-            sourceHeight > 0
-        ) {
+        return if (sourceWidth > 0 && sourceHeight > 0) {
             val scale = NOTIFICATION_COVER_MAX_SIZE_PX.toFloat() / maxOf(sourceWidth, sourceHeight)
             val targetWidth = (sourceWidth * scale).roundToInt().coerceAtLeast(1)
             val targetHeight = (sourceHeight * scale).roundToInt().coerceAtLeast(1)
@@ -217,22 +210,18 @@ class RecordingSavedNotificationManager(
             getFrameAtTime(
                 THUMBNAIL_FRAME_TIME_US,
                 MediaMetadataRetriever.OPTION_CLOSEST_SYNC
-            )?.scaledToNotificationCover()
+            )?.let { bitmap ->
+                val maxDimension = maxOf(bitmap.width, bitmap.height)
+                if (maxDimension <= NOTIFICATION_COVER_MAX_SIZE_PX) return@let bitmap
+                val ratio = NOTIFICATION_COVER_MAX_SIZE_PX.toFloat() / maxDimension
+                bitmap.scale(
+                    (bitmap.width * ratio).roundToInt().coerceAtLeast(1),
+                    (bitmap.height * ratio).roundToInt().coerceAtLeast(1)
+                )
+            }
         }
     }
 
-    private fun Bitmap.scaledToNotificationCover(): Bitmap {
-        val maxDimension = maxOf(width, height)
-        if (maxDimension <= NOTIFICATION_COVER_MAX_SIZE_PX) return this
-
-        val scale = NOTIFICATION_COVER_MAX_SIZE_PX.toFloat() / maxDimension
-        return Bitmap.createScaledBitmap(
-            this,
-            (width * scale).roundToInt().coerceAtLeast(1),
-            (height * scale).roundToInt().coerceAtLeast(1),
-            true
-        )
-    }
 
     companion object {
         const val ACTION_DELETE_RECORDING = "com.island.recorder.action.DELETE_RECORDING"
@@ -242,8 +231,6 @@ class RecordingSavedNotificationManager(
         const val SAVED_NOTIFICATION_ID = 111
 
         private const val CHANNEL_ID = "recording_saved_high_channel"
-        private const val ACTION_REVIEW = "com.android.camera.action.REVIEW"
-        private const val PACKAGE_MIUI_GALLERY = "com.miui.gallery"
         private const val MIME_TYPE_MP4 = "video/mp4"
         private const val OPEN_REQUEST_CODE = 13
         private const val SHARE_REQUEST_OFFSET = 10_000

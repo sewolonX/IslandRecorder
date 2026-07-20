@@ -131,9 +131,9 @@
     <!-- Notifications -->
     <string name="notification_channel_name">Recording Service</string>
     <string name="notification_channel_desc">Shows recording status</string>
-    <string name="notification_recording_title">Recording · %s</string>
+    <string name="notification_recording_title">Recording</string>
     <string name="notification_recording_message">Screen recording in progress…</string>
-    <string name="notification_paused_title">Paused · %s</string>
+    <string name="notification_paused_title">Paused</string>
     <string name="notification_paused_message">Tap to resume</string>
     <string name="notification_processing">Processing video…</string>
     <string name="recording_saved_channel_name">Saved Recordings</string>
@@ -141,6 +141,7 @@
     <string name="recording_saved_title">Screen record saved</string>
     <string name="recording_saved_message">Tap here to see the recording</string>
     <string name="recording_saved_share_chooser">Share recording</string>
+    <string name="recording_saved_open_chooser">Open with</string>
 
     <!-- Floating Controls -->
     <string name="floating_pause">Pause</string>
