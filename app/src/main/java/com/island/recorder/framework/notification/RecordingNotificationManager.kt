@@ -11,6 +11,7 @@ import android.graphics.drawable.Icon
 import android.os.Bundle
 import androidx.core.app.NotificationCompat
 import com.island.recorder.R
+import com.island.recorder.domain.recording.model.TileStyle
 import com.island.recorder.framework.privileged.provider.PrivilegedOperationProvider
 import com.island.recorder.framework.service.RecorderService
 import com.island.recorder.ui.activity.MainActivity
@@ -57,6 +58,7 @@ class RecordingNotificationManager(
         const val CHANNEL_ID = "recording_channel"
         const val NOTIFICATION_ID = 1001
         private const val XMSF_PACKAGE = "com.xiaomi.xmsf"
+        private const val SUPER_ISLAND_HIGHLIGHT_COLOR = "#FB382F"
         private const val SUPER_ISLAND_BLOCKING_INTERVAL_MS = 125
         private const val ACTION_PAUSE_RESUME_REQUEST_CODE = 1
         private const val ACTION_STOP_REQUEST_CODE = 2
@@ -69,6 +71,7 @@ class RecordingNotificationManager(
 
     fun createRecordingNotification(
         durationMs: Long,
+        tileStyle: TileStyle,
         isPaused: Boolean = false,
         bypass: Boolean = false
     ): Notification {
@@ -76,6 +79,7 @@ class RecordingNotificationManager(
         val payload = RecordingNotificationPayload(
             durationMs = durationMs,
             isPaused = isPaused,
+            tileStyle = tileStyle,
             title = context.getString(
                 if (isPaused) R.string.notification_paused_title else R.string.notification_recording_title,
                 formattedDuration
@@ -298,7 +302,7 @@ class RecordingNotificationManager(
         return Bundle().apply {
             putString("miui.focus.param", focusParam.toString())
             putBundle("miui.focus.actions", buildSuperIslandActions(actions))
-            putBundle("miui.focus.pics", buildSuperIslandPictures())
+            putBundle("miui.focus.pics", buildSuperIslandPictures(payload.tileStyle))
         }
     }
 
@@ -307,6 +311,7 @@ class RecordingNotificationManager(
             put("islandPriority", 1)
             put("islandTimeout", 43200)
             put("islandProperty", 2)
+            put("highlightColor", SUPER_ISLAND_HIGHLIGHT_COLOR)
             put(
                 "bigIslandArea",
                 JSONObject().apply {
@@ -389,11 +394,16 @@ class RecordingNotificationManager(
         }
     }
 
-    private fun buildSuperIslandPictures(): Bundle =
+    private fun buildSuperIslandPictures(tileStyle: TileStyle): Bundle =
         Bundle().apply {
+            val tickerIconRes = if (tileStyle == TileStyle.APP_ICON) {
+                R.drawable.ic_focus_ticker
+            } else {
+                R.drawable.ic_focus_ticker_recorder
+            }
             putParcelable(
                 "miui.focus.pic_ticker",
-                Icon.createWithResource(context, R.drawable.ic_focus_ticker)
+                Icon.createWithResource(context, tickerIconRes)
             )
             putParcelable(
                 "miui.focus.pic_pause",
@@ -488,6 +498,7 @@ class RecordingNotificationManager(
     private data class RecordingNotificationPayload(
         val durationMs: Long,
         val isPaused: Boolean,
+        val tileStyle: TileStyle,
         val title: String,
         val contentText: String,
         val bypassSuperIslandRestriction: Boolean

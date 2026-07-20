@@ -27,6 +27,7 @@ import com.island.recorder.domain.recording.model.RecordingOutput
 import com.island.recorder.domain.recording.model.RecordingSettings
 import com.island.recorder.domain.recording.model.RecordingState
 import com.island.recorder.domain.recording.model.ScreenOrientation
+import com.island.recorder.domain.recording.model.TileStyle
 import com.island.recorder.domain.recording.provider.RecordingStorageProvider
 import com.island.recorder.framework.notification.RecordingNotificationManager
 import com.island.recorder.framework.notification.RecordingSavedNotificationManager
@@ -226,6 +227,7 @@ class RecorderService : Service() {
             // Start foreground service (must happen on main thread)
             val notification = recordingNotificationManager.createRecordingNotification(
                 0L,
+                tileStyle = settings.tileStyle,
                 bypass = settings.bypassFocusIsland
             )
             logStartupStep("notification created")
@@ -448,7 +450,11 @@ class RecorderService : Service() {
                 requestTileRefresh(this@RecorderService)
                 val bypass = settings.bypassFocusIsland
                 recordingNotificationManager.updateNotification(
-                    recordingNotificationManager.createRecordingNotification(0L, bypass = bypass),
+                    recordingNotificationManager.createRecordingNotification(
+                        0L,
+                        tileStyle = settings.tileStyle,
+                        bypass = bypass
+                    ),
                     bypass = bypass
                 )
 
@@ -786,6 +792,7 @@ class RecorderService : Service() {
 
             val notification = recordingNotificationManager.createRecordingNotification(
                 currentState.durationMs,
+                tileStyle = currentSettings?.tileStyle ?: TileStyle.DEFAULT,
                 isPaused = true,
                 bypass = currentSettings?.bypassFocusIsland ?: false
             )
@@ -810,6 +817,7 @@ class RecorderService : Service() {
 
             val notification = recordingNotificationManager.createRecordingNotification(
                 currentState.durationMs,
+                tileStyle = currentSettings?.tileStyle ?: TileStyle.DEFAULT,
                 bypass = currentSettings?.bypassFocusIsland ?: false
             )
             recordingNotificationManager.updateNotification(
