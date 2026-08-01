@@ -131,9 +131,9 @@
     <!-- Notifications -->
     <string name="notification_channel_name">录制服务</string>
     <string name="notification_channel_desc">显示录制状态</string>
-    <string name="notification_recording_title">正在录制 · %s</string>
+    <string name="notification_recording_title">正在录制</string>
     <string name="notification_recording_message">正在录制屏幕…</string>
-    <string name="notification_paused_title">已暂停 · %s</string>
+    <string name="notification_paused_title">已暂停</string>
     <string name="notification_paused_message">点击继续</string>
     <string name="notification_processing">正在处理视频…</string>
     <string name="recording_saved_channel_name">已保存的录屏</string>
@@ -141,6 +141,7 @@
     <string name="recording_saved_title">录屏已保存</string>
     <string name="recording_saved_message">点按查看录屏</string>
     <string name="recording_saved_share_chooser">分享录屏</string>
+    <string name="recording_saved_open_chooser">打开方式</string>
 
     <!-- Floating Controls -->
     <string name="floating_pause">暂停</string>

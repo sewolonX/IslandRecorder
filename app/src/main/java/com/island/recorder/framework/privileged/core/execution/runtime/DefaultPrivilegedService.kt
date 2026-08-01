@@ -36,6 +36,7 @@ class DefaultPrivilegedService private constructor(
         private const val SETTING_DISABLED = "0"
         private const val CALL_METHOD_GET_SECURE = "GET_secure"
         private const val CALL_METHOD_PUT_SECURE = "PUT_secure"
+        private const val CALL_METHOD_GET_SYSTEM = "GET_system"
         private const val CALL_METHOD_PUT_SYSTEM = "PUT_system"
         private const val CALL_METHOD_USER_KEY = "_user"
         private const val CALL_METHOD_OVERRIDEABLE_BY_RESTORE_KEY = "_overrideable_by_restore"
@@ -87,13 +88,43 @@ class DefaultPrivilegedService private constructor(
     }
 
     override fun setShowTouches(enabled: Boolean): Boolean {
-        return try {
-            val targetValue = if (enabled) SETTING_ENABLED else SETTING_DISABLED
+        val targetValue = if (enabled) SETTING_ENABLED else SETTING_DISABLED
+        // Try binder-based approach first
+        try {
             putSystemSettingWithHookedProvider(SETTING_SHOW_TOUCHES, targetValue)
-            Timber.tag(TAG).i("Set show_touches to $targetValue via ${runtime.name}.")
-            true
+            val readback = getSystemSettingWithHookedProvider(SETTING_SHOW_TOUCHES)
+            Timber.tag(TAG).i(
+                "Set show_touches to $targetValue via ${runtime.name} (binder). " +
+                    "Readback: actual=$readback (expected=$targetValue)."
+            )
+            if (readback == targetValue) return true
+            Timber.tag(TAG).w(
+                "Show touches readback mismatch via ${runtime.name} (binder): " +
+                    "expected=$targetValue actual=$readback. Falling back to shell."
+            )
         } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "Failed to set show_touches via ${runtime.name}")
+            Timber.tag(TAG).w(
+                e, "Binder approach failed for show_touches via ${runtime.name}. " +
+                    "Falling back to shell."
+            )
+        }
+
+        // Fallback: shell command
+        return try {
+            val success = putSystemSettingViaShell(SETTING_SHOW_TOUCHES, targetValue)
+            if (success) {
+                val readback = getSystemSettingViaShell(SETTING_SHOW_TOUCHES)
+                Timber.tag(TAG).i(
+                    "Set show_touches to $targetValue via ${runtime.name} (shell). " +
+                        "Readback: actual=$readback (expected=$targetValue)."
+                )
+                readback == targetValue
+            } else {
+                Timber.tag(TAG).e("Shell command failed for show_touches via ${runtime.name}.")
+                false
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Shell fallback failed for show_touches via ${runtime.name}")
             false
         }
     }
@@ -284,6 +315,54 @@ class DefaultPrivilegedService private constructor(
         )
 
         return result?.getString(Settings.NameValueTable.VALUE)
+    }
+
+    private fun getSystemSettingWithHookedProvider(name: String): String? {
+        val targetBinder = runtime.settingsBinder(reflect, Settings.System::class.java)
+            ?: throw IllegalStateException("Privileged Settings.System binder is unavailable")
+        val provider = hookedContentProvider(targetBinder)
+        val extras = Bundle().apply {
+            putInt(CALL_METHOD_USER_KEY, android.os.Process.myUid() / 100000)
+        }
+
+        val result = reflect.invoke<Bundle>(
+            obj = provider,
+            name = "call",
+            clazz = provider.javaClass,
+            parameterTypes = arrayOf(
+                AttributionSource::class.java,
+                String::class.java,
+                String::class.java,
+                String::class.java,
+                Bundle::class.java
+            ),
+            runtime.settingsResolverContext(context).attributionSource,
+            requireNotNull(Settings.System.CONTENT_URI.authority),
+            CALL_METHOD_GET_SYSTEM,
+            name,
+            extras
+        )
+
+        return result?.getString(Settings.NameValueTable.VALUE)
+    }
+
+    private fun putSystemSettingViaShell(name: String, value: String): Boolean {
+        val process = ProcessBuilder("su", "-c", "settings put system $name $value")
+            .redirectErrorStream(true)
+            .start()
+        process.outputStream.close()
+        process.waitFor()
+        return process.exitValue() == 0
+    }
+
+    private fun getSystemSettingViaShell(name: String): String? {
+        val process = ProcessBuilder("su", "-c", "settings get system $name")
+            .redirectErrorStream(true)
+            .start()
+        process.outputStream.close()
+        val output = process.inputStream.bufferedReader().readText().trim()
+        process.waitFor()
+        return output.ifEmpty { null }
     }
 
     private fun hookedContentProvider(binder: IBinder): Any {
